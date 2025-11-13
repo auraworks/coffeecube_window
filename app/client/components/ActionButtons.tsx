@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ProgressModal } from "@/components/ui/progress-modal";
 import { ErrorModal } from "@/components/ui/error-modal";
+import { useSerialPort } from "./hooks/useSerialPort";
 
 export default function ActionButtons() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,12 +14,24 @@ export default function ActionButtons() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorTitle, setErrorTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  
+  // Serial Port 훅 사용
+  const { sendCommand, error: serialError } = useSerialPort();
 
   // 열기 버튼 핸들러
   const handleOpenClick = async () => {
     setModalTitle("열기");
     setIsModalOpen(true);
     setIsProcessing(true);
+    
+    // COM1에 (IBNP) 전송
+    const success = await sendCommand("(IBNP)");
+    
+    if (!success || serialError) {
+      setErrorTitle("시리얼 통신 오류");
+      setErrorMessage(serialError || "명령 전송에 실패했습니다.");
+      setShowErrorAfterProgress(true);
+    }
   };
 
   // 닫기 버튼 핸들러
@@ -26,6 +39,15 @@ export default function ActionButtons() {
     setModalTitle("닫기");
     setIsModalOpen(true);
     setIsProcessing(true);
+    
+    // COM1에 (IBMP) 전송
+    const success = await sendCommand("(IBMP)");
+    
+    if (!success || serialError) {
+      setErrorTitle("시리얼 통신 오류");
+      setErrorMessage(serialError || "명령 전송에 실패했습니다.");
+      setShowErrorAfterProgress(true);
+    }
   };
 
   // 한번더 버튼 핸들러
@@ -33,6 +55,15 @@ export default function ActionButtons() {
     setModalTitle("한번더");
     setIsModalOpen(true);
     setIsProcessing(true);
+    
+    // COM1에 (IBNP) 전송
+    const success = await sendCommand("(IBNP)");
+    
+    if (!success || serialError) {
+      setErrorTitle("시리얼 통신 오류");
+      setErrorMessage(serialError || "명령 전송에 실패했습니다.");
+      setShowErrorAfterProgress(true);
+    }
   };
 
   // 종료 버튼 핸들러

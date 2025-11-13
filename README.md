@@ -1,53 +1,117 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+<h1 align="center">☕ Coffee Cube Kiosk PWA</h1>
 
 <p align="center">
- The fastest way to build apps with Next.js and Supabase
+ 커피박 수거 시스템 - Progressive Web App
 </p>
 
 <p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
+  <a href="#features"><strong>주요 기능</strong></a> ·
+  <a href="#quick-start"><strong>빠른 시작</strong></a> ·
+  <a href="#pwa-setup"><strong>PWA 설정</strong></a> ·
+  <a href="#deployment"><strong>배포</strong></a>
 </p>
 <br/>
 
 ## Features
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+### 🚀 PWA (Progressive Web App)
+- **설치 불필요**: 웹 브라우저에서 바로 사용 가능
+- **오프라인 지원**: 네트워크 없이도 기본 기능 사용
+- **자동 업데이트**: 새로고침만으로 최신 버전 적용
+- **크로스 플랫폼**: Windows, Mac, Linux, Android, iOS 모두 지원
+- **홈 화면 추가**: 앱처럼 설치하여 사용 가능
 
-## Demo
+### 🛠 기술 스택
+- **[Next.js 15](https://nextjs.org)** - App Router, Server Components
+- **[Supabase](https://supabase.com)** - 인증 및 데이터베이스
+- **[TailwindCSS](https://tailwindcss.com)** - 스타일링
+- **[shadcn/ui](https://ui.shadcn.com/)** - UI 컴포넌트
+- **[next-pwa](https://github.com/shadowwalker/next-pwa)** - PWA 지원
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+### ✨ 주요 기능
+- 키오스크 모드 지원
+- 다크/라이트 테마
+- 반응형 디자인
+- Service Worker 캐싱
+- 오프라인 페이지
 
-## Deploy to Vercel
+## Quick Start
 
-Vercel deployment will guide you through creating a Supabase account and project.
+### 1. 환경 변수 설정
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+`.env.local` 파일을 생성하고 다음 내용을 추가하세요:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+### 2. 의존성 설치
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+```bash
+npm install
+```
+
+### 3. PWA 아이콘 생성
+
+```bash
+npm run generate:icons
+```
+
+### 4. 개발 서버 실행
+
+```bash
+npm run dev
+```
+
+브라우저에서 `http://localhost:3000` 접속
+
+### 5. 프로덕션 빌드
+
+```bash
+npm run build
+npm start
+```
+
+## PWA Setup
+
+자세한 PWA 설정 방법은 [PWA_SETUP.md](./PWA_SETUP.md) 문서를 참고하세요.
+
+### PWA 설치 방법
+
+#### 데스크톱 (Chrome/Edge)
+1. 웹사이트 접속
+2. 주소창 오른쪽의 설치 아이콘(+) 클릭
+3. "설치" 버튼 클릭
+
+#### 모바일 (Android)
+1. Chrome에서 웹사이트 접속
+2. 메뉴(⋮) → "홈 화면에 추가"
+3. "추가" 버튼 클릭
+
+#### 모바일 (iOS)
+1. Safari에서 웹사이트 접속
+2. 공유 버튼(□↑) 클릭
+3. "홈 화면에 추가"
+4. "추가" 버튼 클릭
+
+## Deployment
+
+### Vercel 배포
+
+```bash
+# Vercel CLI 설치
+npm i -g vercel
+
+# 배포
+vercel
+```
+
+### 다른 호스팅
+
+1. 프로덕션 빌드: `npm run build`
+2. `.next` 폴더를 서버에 업로드
+3. Node.js 서버에서 `npm start` 실행
 
 ## Clone and run locally
 

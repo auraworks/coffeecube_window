@@ -7,6 +7,12 @@ let mainWindow;
 let nextServer;
 
 function createWindow() {
+  // 이미 창이 존재하면 생성하지 않음
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    console.log("Window already exists, focusing...");
+    mainWindow.focus();
+    return;
+  }
   const { screen } = require("electron");
   const primaryDisplay = screen.getPrimaryDisplay();
   // 전체 화면 크기 사용 (태스크바 포함)
@@ -44,6 +50,11 @@ function createWindow() {
   mainWindow.webContents.setUserAgent(
     "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
   );
+
+  // 개발자 도구 열기 (프로덕션에서도 F12로 열 수 있도록)
+  if (isDev) {
+    mainWindow.webContents.openDevTools();
+  }
 
   console.log(
     `Screen: ${screenWidth}x${screenHeight}, Window: ${windowWidth}x${windowHeight}`
@@ -195,10 +206,29 @@ function startNextServer() {
 
     console.log("Node executable:", nodeExecutable);
 
+    // .env.local 파일 로드
+    const envPath = path.join(appPath, ".env.local");
+    let envVars = { ...process.env };
+    
+    if (fs.existsSync(envPath)) {
+      console.log("✓ Loading .env.local from:", envPath);
+      const envContent = fs.readFileSync(envPath, "utf8");
+      envContent.split("\n").forEach((line) => {
+        const match = line.match(/^([^=:#]+)=(.*)$/);
+        if (match) {
+          const key = match[1].trim();
+          const value = match[2].trim();
+          envVars[key] = value;
+        }
+      });
+    } else {
+      console.warn("⚠ .env.local not found at:", envPath);
+    }
+
     nextServer = spawn(nodeExecutable, [serverPath], {
       cwd: standalonePath,
       env: {
-        ...process.env,
+        ...envVars,
         NODE_ENV: "production",
         PORT: "3000",
         HOSTNAME: "localhost",
@@ -230,26 +260,65 @@ function startNextServer() {
       }
     });
 
-    // 서버 시작 대기
-    setTimeout(() => {
-      console.log("Next.js server should be ready");
-      resolve();
-    }, 5000);
+    // 서버가 실제로 준비될 때까지 대기
+    const checkServer = async () => {
+      const http = require("http");
+      for (let i = 0; i < 30; i++) {
+        try {
+          await new Promise((resolveCheck, rejectCheck) => {
+            const req = http.get("http://localhost:3000", (res) => {
+              resolveCheck();
+            });
+            req.on("error", rejectCheck);
+            req.setTimeout(1000, () => {
+              req.destroy();
+              rejectCheck(new Error("Timeout"));
+            });
+          });
+          console.log("✓ Next.js server is ready!");
+          resolve();
+          return;
+        } catch (err) {
+          console.log(`Waiting for Next.js server... (${i + 1}/30)`);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      console.error("✗ Next.js server failed to start");
+      resolve(); // 타임아웃되어도 계속 진행
+    };
+    
+    checkServer();
   });
 }
 
-app.whenReady().then(async () => {
-  // Next.js 서버 먼저 시작
-  await startNextServer();
+// Single instance lock - 하나의 인스턴스만 실행되도록
+const gotTheLock = app.requestSingleInstanceLock();
 
-  // Electron 창 생성
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (!gotTheLock) {
+  console.log("Another instance is already running. Quitting...");
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // 두 번째 인스턴스가 실행되려고 하면 기존 창을 포커스
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
     }
   });
+
+  app.whenReady().then(async () => {
+    // Next.js 서버 먼저 시작
+    await startNextServer();
+
+    // Electron 창 생성
+    createWindow();
+  });
+}
+
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });
 
 app.on("window-all-closed", () => {

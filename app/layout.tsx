@@ -14,6 +14,27 @@ export const metadata: Metadata = {
     "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
   icons: {
     icon: "/logo.svg",
+    apple: "/icon-192x192.png",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "CoffeeCube",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    siteName: "Coffee Cube Kiosk",
+    title: "Coffee Cube Admin | 커피큐브 키오스크",
+    description: "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Coffee Cube Admin | 커피큐브 키오스크",
+    description: "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
   },
 };
 
