@@ -165,7 +165,7 @@ export default function ClientContent({ user }: ClientContentProps) {
 
       {/* 메인 콘텐츠 */}
       <div className="flex-1 w-full mt-10 px-20">
-        <div className="w-full h-[840px] px-11 py-20 bg-[#F4F4F4] rounded-[16px]">
+        <div className="w-full h-[920px] px-11 py-20 bg-[#F4F4F4] rounded-[16px]">
           {/* 환영 메시지 */}
           <WelcomeMessage user={user} />
 

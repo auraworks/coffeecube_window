@@ -1,0 +1,5 @@
+electron/
+out/
+dist/
+node_modules/
+.next/

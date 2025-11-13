@@ -5,6 +5,7 @@ import * as React from "react";
 interface ProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onComplete?: () => void;
   title?: string;
   subtitle?: string;
   progress?: number;
@@ -16,6 +17,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
   ({
     isOpen,
     onClose,
+    onComplete,
     title = "장비명령 1",
     subtitle = "작업이 진행중입니다. 잠시만 기다려주세요.",
     progress: initialProgress = 0,
@@ -37,22 +39,27 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
       // 모달 오픈 시 항상 0%에서 시작
       setProgress(0);
 
-      // 모달이 열리면 자동으로 진행률 시작 - 0.1초마다 2%씩 증가 (5초에 100% 완료)
+      // 모달이 열리면 자동으로 진행률 시작 - 0.05초마다 1%씩 증가 (5초에 100% 완료)
       const interval = setInterval(() => {
         setProgress((prev) => {
-          const newProgress = prev + 2;
+          const newProgress = prev + 1;
           if (newProgress >= 100) {
             setStatus("진행 완료");
             setIsCompleted(true);
             clearInterval(interval);
+            // 100% 완료 시 0.5초 후 자동으로 모달 닫기
+            setTimeout(() => {
+              onComplete?.();
+              onClose();
+            }, 500);
             return 100;
           }
           return newProgress;
         });
-      }, 100); // 0.1초마다 2%씩 증가
+      }, 50); // 0.05초마다 1%씩 증가
 
       return () => clearInterval(interval);
-    }, [isOpen, initialProgress, initialStatus]);
+    }, [isOpen, initialProgress, initialStatus, onClose, onComplete]);
 
     if (!isOpen) return null;
 
@@ -168,7 +175,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
                     strokeLinecap="round"
                     strokeDasharray={`${circumference}`}
                     strokeDashoffset={`${circumference - (progress / 100) * circumference}`}
-                    style={{ transition: "stroke-dashoffset 0.1s ease-out" }}
+                    style={{ transition: "stroke-dashoffset 0.05s linear" }}
                   />
                 </svg>
 
@@ -179,7 +186,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
                       {status}
                     </div>
                   </div>
-                  <div className="relative text-4xl font-bold tracking-normal text-center leading-[50px] text-neutral-800 max-md:text-4xl max-md:leading-10 max-sm:text-3xl max-sm:leading-10 transition-all duration-100 ease-out">
+                  <div className="relative text-4xl font-bold tracking-normal text-center leading-[50px] text-neutral-800 max-md:text-4xl max-md:leading-10 max-sm:text-3xl max-sm:leading-10 transition-all duration-50 linear">
                     {Math.round(progress)}%
                   </div>
                   <div className="relative text-xs font-medium leading-5 text-neutral-400 max-sm:text-xs max-sm:leading-5">
@@ -196,7 +203,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
                     height: "40px", 
                     left: `${160 + 140.8 * Math.sin((progress / 100) * 2 * Math.PI) - 20}px`, 
                     top: `${160 - 140.8 * Math.cos((progress / 100) * 2 * Math.PI) - 20}px`,
-                    transition: "all 0.1s ease-out",
+                    transition: "all 0.05s linear",
                   }}
                   width="64"
                   height="50"
