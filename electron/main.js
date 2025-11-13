@@ -1,73 +1,271 @@
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
+const { app, BrowserWindow } = require("electron");
+const path = require("path");
+const { spawn } = require("child_process");
 
-const isDev = process.env.NODE_ENV === 'development';
-const VERCEL_URL = 'https://coffeecube-window-omega.vercel.app';
+const isDev = process.env.NODE_ENV === "development";
 let mainWindow;
+let nextServer;
 
 function createWindow() {
+  const { screen } = require("electron");
+  const primaryDisplay = screen.getPrimaryDisplay();
+  // 전체 화면 크기 사용 (태스크바 포함)
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds;
+
+  // 1080x1920 비율 유지하면서 높이를 화면에 맞춤
+  const targetRatio = 1080 / 1920; // 0.5625 (9:16)
+  const windowHeight = screenHeight;
+  const windowWidth = Math.round(windowHeight * targetRatio);
+
   mainWindow = new BrowserWindow({
-    width: 1080,
-    height: 1920,
+    width: windowWidth,
+    height: windowHeight,
+    x: Math.round((screenWidth - windowWidth) / 2), // 가로 중앙 정렬
+    y: 0,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, "preload.js"),
+      zoomFactor: 1.0,
     },
-    icon: path.join(__dirname, '../public/favicon.ico')
+    icon: path.join(__dirname, "../public/favicon.ico"),
+    // 키오스크 모드 설정
+    fullscreen: false,
+    kiosk: false,
+    frame: false, // 프레임 완전 제거하여 높이 확보
+    autoHideMenuBar: true,
+    resizable: true, // 전체 화면 모드를 위해 true로 변경
+    maximizable: true, // 전체 화면 모드를 위해 true로 변경
+    alwaysOnTop: !isDev, // 프로덕션에서는 항상 위에
+    fullscreenable: true, // 전체 화면 가능하도록 설정
   });
 
   // 모바일 viewport 시뮬레이션 설정
-  mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow.webContents.setUserAgent(
-      'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36'
-    );
-    
-    // Viewport를 1080x1920으로 설정
-    mainWindow.webContents.executeJavaScript(`
-      const meta = document.createElement('meta');
-      meta.name = 'viewport';
-      meta.content = 'width=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-      document.head.appendChild(meta);
-    `);
-  });
+  mainWindow.webContents.setUserAgent(
+    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
+  );
 
-  // 개발 환경에서는 로컬 서버, 프로덕션에서는 Vercel URL 사용
-  const startUrl = isDev ? 'http://localhost:3000' : VERCEL_URL;
-  
-  console.log('Loading URL:', startUrl);
-  
-  mainWindow.loadURL(startUrl).catch(err => {
-    console.error('Failed to load URL:', err);
-  });
+  console.log(
+    `Screen: ${screenWidth}x${screenHeight}, Window: ${windowWidth}x${windowHeight}`
+  );
+
+  // 항상 로컬 서버 사용
+  const startUrl = "http://localhost:3000";
+
+  console.log("Loading URL:", startUrl);
+
+  // 서버가 준비될 때까지 대기 후 로드
+  const loadUrlWithRetry = async (retries = 30) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await mainWindow.loadURL(startUrl);
+        console.log("Successfully loaded URL");
+        return;
+      } catch (err) {
+        console.log(`Waiting for server... (${i + 1}/${retries})`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+    console.error("Failed to load URL after retries");
+  };
+
+  loadUrlWithRetry();
 
   // 로딩 실패 시 에러 로그
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('Failed to load:', errorCode, errorDescription);
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (event, errorCode, errorDescription) => {
+      console.error("Failed to load:", errorCode, errorDescription);
+    }
+  );
+
+  // 페이지 로드 완료 시 스케일링 적용
+  mainWindow.webContents.on("did-finish-load", () => {
+    console.log("Page loaded successfully");
+    applyScaling();
   });
 
-  // 페이지 로드 완료 시 로그
-  mainWindow.webContents.on('did-finish-load', () => {
-    console.log('Page loaded successfully');
+  // 스케일링 적용 함수
+  function applyScaling() {
+    const bounds = mainWindow.getBounds();
+    const currentWidth = bounds.width;
+    const currentHeight = bounds.height;
+
+    // 1080x1920 콘텐츠를 현재 창 크기에 맞게 스케일
+    const scaleX = currentWidth / 1080;
+    const scaleY = currentHeight / 1920;
+    const scale = Math.min(scaleX, scaleY);
+
+    mainWindow.webContents.setZoomFactor(scale);
+    console.log(
+      `Applied zoom factor: ${scale} (width: ${currentWidth}, height: ${currentHeight})`
+    );
+  }
+
+  // F11 키로 전체 화면 토글
+  let isInFullScreenMode = false;
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.key === "F11" && input.type === "keyDown") {
+      isInFullScreenMode = !isInFullScreenMode;
+
+      if (isInFullScreenMode) {
+        // 전체 화면 모드: 모니터 전체를 채움
+        mainWindow.setFullScreen(true);
+        mainWindow.setKiosk(false); // kiosk는 false로 유지 (ESC로 나갈 수 있게)
+        console.log("Entering fullscreen mode");
+      } else {
+        // 일반 모드: 원래 창 크기로 복귀
+        mainWindow.setFullScreen(false);
+        mainWindow.setKiosk(false);
+        mainWindow.setBounds({
+          width: windowWidth,
+          height: windowHeight,
+          x: Math.round((screenWidth - windowWidth) / 2),
+          y: 0,
+        });
+        console.log("Exiting fullscreen mode");
+      }
+
+      // 전체 화면 전환 후 스케일링 재적용
+      setTimeout(() => {
+        applyScaling();
+      }, 100);
+    }
   });
 
-  mainWindow.on('closed', () => {
+  // 창 크기 변경 시 스케일링 재적용
+  mainWindow.on("resize", () => {
+    applyScaling();
+  });
+
+  mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
 
-app.whenReady().then(() => {
+// Next.js 서버 시작 함수
+function startNextServer() {
+  return new Promise((resolve) => {
+    if (isDev) {
+      // 개발 모드에서는 이미 실행 중인 서버 사용
+      resolve();
+      return;
+    }
+
+    // 프로덕션 모드에서 Next.js 서버 시작
+    const isPackaged = app.isPackaged;
+    const appPath = isPackaged
+      ? path.join(process.resourcesPath, "app")
+      : app.getAppPath();
+
+    console.log("Starting Next.js server...");
+    console.log("App path:", appPath);
+    console.log("Is packaged:", isPackaged);
+    console.log("process.resourcesPath:", process.resourcesPath);
+    console.log("app.getAppPath():", app.getAppPath());
+
+    // Next.js standalone 서버 실행
+    const serverPath = path.join(appPath, ".next", "standalone", "server.js");
+    const standalonePath = path.join(appPath, ".next", "standalone");
+
+    console.log("Server path:", serverPath);
+    console.log("Standalone path:", standalonePath);
+
+    // 파일 존재 확인
+    const fs = require("fs");
+    if (!fs.existsSync(serverPath)) {
+      console.error("ERROR: server.js not found at:", serverPath);
+      console.error("Please run: npm run electron:package");
+
+      // 에러 다이얼로그 표시
+      const { dialog } = require("electron");
+      dialog.showErrorBox(
+        "Application Error",
+        `Next.js server files not found.\n\nPath: ${serverPath}\n\nPlease reinstall the application.`
+      );
+      app.quit();
+      return;
+    }
+    console.log("✓ server.js found");
+
+    // Electron 내장 Node.js 사용 (다른 PC에 Node.js 설치 불필요)
+    const nodePath = process.execPath.replace(/electron\.exe$/i, "node.exe");
+    const useEmbeddedNode = fs.existsSync(nodePath);
+    const nodeExecutable = useEmbeddedNode ? nodePath : process.execPath;
+
+    console.log("Node executable:", nodeExecutable);
+
+    nextServer = spawn(nodeExecutable, [serverPath], {
+      cwd: standalonePath,
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        PORT: "3000",
+        HOSTNAME: "localhost",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    // 서버 출력 로그
+    nextServer.stdout.on("data", (data) => {
+      console.log("[Next.js]:", data.toString());
+    });
+
+    nextServer.stderr.on("data", (data) => {
+      console.error("[Next.js Error]:", data.toString());
+    });
+
+    nextServer.on("error", (err) => {
+      console.error("Failed to start Next.js server:", err);
+      const { dialog } = require("electron");
+      dialog.showErrorBox(
+        "Server Error",
+        `Failed to start Next.js server: ${err.message}`
+      );
+    });
+
+    nextServer.on("exit", (code) => {
+      if (code !== 0) {
+        console.error(`Next.js server exited with code ${code}`);
+      }
+    });
+
+    // 서버 시작 대기
+    setTimeout(() => {
+      console.log("Next.js server should be ready");
+      resolve();
+    }, 5000);
+  });
+}
+
+app.whenReady().then(async () => {
+  // Next.js 서버 먼저 시작
+  await startNextServer();
+
+  // Electron 창 생성
   createWindow();
 
-  app.on('activate', () => {
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+app.on("window-all-closed", () => {
+  // Next.js 서버 종료
+  if (nextServer) {
+    nextServer.kill();
+  }
+
+  if (process.platform !== "darwin") {
     app.quit();
+  }
+});
+
+// 앱 종료 시 Next.js 서버도 종료
+app.on("before-quit", () => {
+  if (nextServer) {
+    nextServer.kill();
   }
 });

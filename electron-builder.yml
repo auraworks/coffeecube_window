@@ -3,33 +3,15 @@ productName: CoffeeCube
 directories:
   output: dist
 files:
-  - .next/**/*
-  - app/**/*
-  - components/**/*
-  - lib/**/*
-  - utils/**/*
+  - .next/standalone/**/*
+  - .next/static/**/*
   - public/**/*
   - electron/**/*
   - package.json
-  - next.config.ts
-  - tsconfig.json
-  - tailwind.config.ts
-  - postcss.config.mjs
-  - components.json
-  - middleware.ts
   - "!node_modules"
-  - node_modules/next/**/*
-  - node_modules/react/**/*
-  - node_modules/react-dom/**/*
-  - node_modules/@supabase/**/*
-  - node_modules/@radix-ui/**/*
-  - node_modules/lucide-react/**/*
-  - node_modules/clsx/**/*
-  - node_modules/class-variance-authority/**/*
-  - node_modules/tailwind-merge/**/*
-  - node_modules/next-themes/**/*
 asarUnpack:
-  - .next/**/*
+  - .next/standalone/**/*
+  - .next/static/**/*
 win:
   target:
     - target: zip

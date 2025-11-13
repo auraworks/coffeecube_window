@@ -11,7 +11,8 @@
     "lint": "next lint",
     "electron": "electron .",
     "electron:dev": "concurrently \"cross-env NODE_ENV=development next dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
-    "electron:package": "next build && electron-packager . CoffeeCube --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/(dist|.git)\" --prune=false"
+    "electron:build": "next build && node scripts/post-build.js && electron-builder --win --x64",
+    "electron:package": "node scripts/package-electron.js"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -44,6 +45,7 @@
     "electron-packager": "^17.1.2",
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
+    "fs-extra": "^11.2.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
