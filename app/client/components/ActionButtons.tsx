@@ -144,7 +144,7 @@ export default function ActionButtons() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4 w-full mt-20">
+      <div className="flex flex-col gap-4 w-full">
         {/* 3개의 행을 Skeleton으로 표시 */}
         {[1, 2, 3].map((row) => (
           <div key={row} className="flex flex-row gap-4 w-full">
@@ -168,7 +168,7 @@ export default function ActionButtons() {
 
   return (
     <>
-      <div className="flex flex-col gap-4 w-full mt-20">
+      <div className="flex flex-col gap-4 w-full">
         {buttonRows.map((row, rowIndex) => (
           <div key={rowIndex} className="flex flex-row gap-4 w-full">
             {row.map((button) => (

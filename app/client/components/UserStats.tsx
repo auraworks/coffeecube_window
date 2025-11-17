@@ -51,11 +51,11 @@ export default function UserStats({ stats: initialStats }: UserStatsProps) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-5 info-container">
+      <div className="flex flex-col gap-4 info-container">
         {/* Skeleton 로딩 */}
-        <div className="w-full h-[126px] bg-gray-200 animate-pulse rounded-[12px]"></div>
-        <div className="w-full h-[126px] bg-gray-200 animate-pulse rounded-[12px]"></div>
-        <div className="w-full h-[126px] bg-gray-200 animate-pulse rounded-[12px]"></div>
+        <div className="w-full h-[100px] bg-gray-200 animate-pulse rounded-[12px]"></div>
+        <div className="w-full h-[100px] bg-gray-200 animate-pulse rounded-[12px]"></div>
+        <div className="w-full h-[100px] bg-gray-200 animate-pulse rounded-[12px]"></div>
       </div>
     );
   }
@@ -71,26 +71,26 @@ export default function UserStats({ stats: initialStats }: UserStatsProps) {
   }
 
   return (
-    <div className="flex flex-col gap-5 info-container ">
-      <div className="w-full h-[126px] bg-[#E7EDE7] py-[32px] px-[52px] rounded-[12px] flex flex-row justify-between items-center">
-        <h3 className="font-semibold text-[28px] text-[#255220]">
+    <div className="flex flex-col gap-4 info-container ">
+      <div className="w-full h-[100px] bg-[#E7EDE7] py-[24px] px-[52px] rounded-[12px] flex flex-row justify-between items-center">
+        <h3 className="font-semibold text-[24px] text-[#255220]">
           누적 투입량
         </h3>
-        <p className="text-[44px] font-bold text-primary">{stats.totalInput}</p>
+        <p className="text-[36px] font-bold text-primary">{stats.totalInput}</p>
       </div>
 
-      <div className="w-full h-[126px] bg-[#E7EDE7] py-[32px] px-[52px] rounded-[12px] flex flex-row justify-between items-center">
-        <h3 className="font-semibold text-[28px] text-[#255220]">
+      <div className="w-full h-[100px] bg-[#E7EDE7] py-[24px] px-[52px] rounded-[12px] flex flex-row justify-between items-center">
+        <h3 className="font-semibold text-[24px] text-[#255220]">
           오늘 투입량
         </h3>
-        <p className="text-[44px] font-bold text-primary">{stats.todayInput}</p>
+        <p className="text-[36px] font-bold text-primary">{stats.todayInput}</p>
       </div>
 
-      <div className="w-full h-[126px] bg-[#E7EDE7] py-[32px] px-[52px] rounded-[12px] flex flex-row justify-between items-center">
-        <h3 className="font-semibold text-[28px] text-[#255220]">
+      <div className="w-full h-[100px] bg-[#E7EDE7] py-[24px] px-[52px] rounded-[12px] flex flex-row justify-between items-center">
+        <h3 className="font-semibold text-[24px] text-[#255220]">
           마이 포인트
         </h3>
-        <p className="text-[44px] font-bold text-primary">{stats.myPoints}</p>
+        <p className="text-[36px] font-bold text-primary">{stats.myPoints}</p>
       </div>
     </div>
   );

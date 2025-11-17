@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     // equipment_list에서 bucket 데이터 가져오기
     const { data: equipmentData } = await supabase
       .from("equipment_list")
-      .select("bucket1, bucket2, bucket3, bucket4")
+      .select("bucket1, bucket2, bucket3, bucket4, bucket_active")
       .eq("robot_code", robotCode)
       .single();
 
@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
       bucket2: equipmentData?.bucket2 || 0,
       bucket3: equipmentData?.bucket3 || 0,
       bucket4: equipmentData?.bucket4 || 0,
+      bucket_active: equipmentData?.bucket_active || "bucket1",
     };
 
     return NextResponse.json(responseData);

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import WelcomeMessage from "./WelcomeMessage";
 import UserStats from "./UserStats";
 import ActionButtons from "./ActionButtons";
+import BucketStatus from "./BucketStatus";
 import { User, EquipmentStatusData } from "../types";
 import { useRouter } from "next/navigation";
 
@@ -188,15 +189,27 @@ export default function ClientContent({ user }: ClientContentProps) {
 
       {/* 메인 콘텐츠 */}
       <div className="flex-1 w-full mt-10 px-20">
-        <div className="w-full h-[920px] px-11 py-20 bg-[#F4F4F4] rounded-[16px]">
+        <div className="w-full min-h-[920px] px-11 py-12 bg-[#F4F4F4] rounded-[16px] flex flex-col">
           {/* 환영 메시지 */}
           <WelcomeMessage user={user} />
 
+          {/* 수거함 상태 */}
+          <div className="mt-6">
+            <BucketStatus
+              equipmentData={equipmentData}
+              loading={!isInitialized}
+            />
+          </div>
+
           {/* 사용자 통계 */}
-          <UserStats />
+          <div className="mt-6">
+            <UserStats />
+          </div>
 
           {/* 액션 버튼들 */}
-          <ActionButtons />
+          <div className="mt-8">
+            <ActionButtons />
+          </div>
         </div>
       </div>
     </div>
