@@ -34,10 +34,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 시리얼 통신 명령어 전송을 위한 플래그 반환
     return NextResponse.json({
       success: true,
       message: "중량이 초기화되었습니다.",
       data,
+      shouldSendSerialCommand: true,
+      serialCommand: "(SB1P)",
     });
   } catch (error) {
     return NextResponse.json(

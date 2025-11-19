@@ -24,205 +24,10 @@ export interface MockResponse {
  * 각 버튼명을 키로 하여 해당 버튼의 명령 시퀀스에 대한 응답을 정의합니다.
  */
 export const buttonMockResponses: Record<string, MockResponse[]> = {
-  // 열기 버튼
-  열기: [
+  // 관리자 페이지 버튼들의 mock 응답 추가 가능
+  중량초기화: [
     {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(WTOK)",
-      delayMs: 800,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 600,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-  ],
-
-  // 한번더 버튼
-  한번더: [
-    {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(WTOK)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-  ],
-
-  // 비상정지 버튼
-  비상정지: [
-    {
-      receive: "(STOP)",
-      delayMs: 300,
-      shouldSucceed: true,
-    },
-  ],
-
-  // 닫기 버튼
-  닫기: [
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 800,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSCN) / (DSCF)",
-      delayMs: 600,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSCN) / (DSCF)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(1000)", // IWRP 응답 - 15000g (15kg, bucket 전환 발생)
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISMN) / (ISMF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISMN) / (ISMF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-  ],
-
-  // 종료 버튼
-  종료: [
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSCN) / (DSCF)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-  ],
-
-  // 단기 버튼
-  단기: [
-    {
-      receive: "(DOOP)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(BFOK)",
-      delayMs: 800,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(BFOK)",
-      delayMs: 600,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(BFOK)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(BFOK)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(BFOK)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(1200)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DOCL)",
+      receive: "(OK)",
       delayMs: 500,
       shouldSucceed: true,
     },
@@ -231,42 +36,16 @@ export const buttonMockResponses: Record<string, MockResponse[]> = {
 
 /**
  * 기본 테스트 응답 리스트 (버튼명이 매칭되지 않을 때 사용)
- * @deprecated buttonMockResponses를 사용하세요
  */
 export const mockResponses: MockResponse[] = [
   {
-    receive: "(ISNN) / (ISNF)",
+    receive: "(OK)",
     delayMs: 500,
     shouldSucceed: true,
   },
   {
-    receive: "(WTOK)",
+    receive: "(DONE)",
     delayMs: 800,
-    shouldSucceed: true,
-  },
-  {
-    receive: "",
-    delayMs: 600,
-    shouldSucceed: true,
-  },
-  {
-    receive: "",
-    delayMs: 400,
-    shouldSucceed: true,
-  },
-  {
-    receive: "(DSON) / (DSOF)",
-    delayMs: 500,
-    shouldSucceed: true,
-  },
-  {
-    receive: "(DSON) / (DSOF)",
-    delayMs: 500,
-    shouldSucceed: true,
-  },
-  {
-    receive: "",
-    delayMs: 500,
     shouldSucceed: true,
   },
 ];

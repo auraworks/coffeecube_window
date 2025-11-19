@@ -22,7 +22,6 @@ interface ActionModeHook {
     ) => void,
     buttonName?: string
   ) => Promise<boolean>;
-  cancelExecution: () => void;
   error: string | null;
 }
 

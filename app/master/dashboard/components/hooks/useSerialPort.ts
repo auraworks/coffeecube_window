@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { globalTestConfig } from "./testConfig";
 
 interface CommandSequence {
   send: string;
@@ -16,8 +17,10 @@ interface SerialPortHook {
     onProgress?: (
       currentCommandIndex: number,
       totalCommands: number,
-      stepInCommand: "send" | "receive"
-    ) => void
+      stepInCommand: "send" | "receive",
+      actualReceive?: string
+    ) => void,
+    buttonName?: string
   ) => Promise<boolean>;
   error: string | null;
 }
@@ -116,10 +119,18 @@ export const useSerialPort = (): SerialPortHook => {
       try {
         if (!writerRef.current || !isConnected) {
           // 연결되어 있지 않으면 자동으로 연결 시도
-          const connected = await connect();
-          if (!connected) {
+          try {
+            const connected = await connect();
+            if (!connected) {
+              setError(
+                "시리얼 포트 연결 실패\n포트를 선택하거나 연결 상태를 확인해주세요."
+              );
+              return false;
+            }
+          } catch (connectErr) {
+            // 연결 시도 중 예외 발생 (사용자가 취소한 경우 등)
             setError(
-              "시리얼 포트 연결 실패\n포트를 선택하거나 연결 상태를 확인해주세요."
+              "시리얼 포트 연결 취소\n포트 선택이 취소되었거나 연결할 수 없습니다."
             );
             return false;
           }
@@ -133,6 +144,11 @@ export const useSerialPort = (): SerialPortHook => {
         // 명령어를 바이트 배열로 변환
         const encoder = new TextEncoder();
         const data = encoder.encode(command);
+
+        // 명령 전송 로그 출력
+        if (globalTestConfig.debugMode) {
+          console.log(`[실제 모드 - 시리얼 송신] ${command}`);
+        }
 
         // 데이터 전송
         await writerRef.current.write(data);
@@ -151,11 +167,12 @@ export const useSerialPort = (): SerialPortHook => {
   const waitForReceive = useCallback(
     async (
       expectedReceive: string,
-      timeoutMs: number = 10000
-    ): Promise<boolean> => {
+      timeoutMs: number = 10000,
+      sendSignal?: string
+    ): Promise<{ success: boolean; receivedData: string }> => {
       if (!readerRef.current) {
         setError("시리얼 포트 Reader 오류\n포트 연결을 다시 시도해주세요.");
-        return false;
+        return { success: false, receivedData: "" };
       }
 
       const decoder = new TextDecoder();
@@ -179,9 +196,9 @@ export const useSerialPort = (): SerialPortHook => {
 
           buffer += decoder.decode(value, { stream: true });
 
-          // 예상 응답이 버퍼에 포함되어 있는지 확인
+          // 일반 신호는 정확히 일치해야 함
           if (buffer.includes(expectedReceive)) {
-            return true;
+            return { success: true, receivedData: buffer };
           }
         }
 
@@ -190,12 +207,12 @@ export const useSerialPort = (): SerialPortHook => {
         setError(
           `응답 대기 시간 초과\n기대 응답: ${expectedReceive}\n실제 수신: ${receivedData}`
         );
-        return false;
+        return { success: false, receivedData };
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "응답 수신 중 오류 발생";
         setError(`응답 수신 오류\n${errorMessage}`);
-        return false;
+        return { success: false, receivedData: buffer };
       }
     },
     []
@@ -207,16 +224,26 @@ export const useSerialPort = (): SerialPortHook => {
       onProgress?: (
         currentCommandIndex: number,
         totalCommands: number,
-        stepInCommand: "send" | "receive"
-      ) => void
+        stepInCommand: "send" | "receive",
+        actualReceive?: string
+      ) => void,
+      buttonName?: string
     ): Promise<boolean> => {
       try {
         // 연결 확인
         if (!writerRef.current || !isConnected) {
-          const connected = await connect();
-          if (!connected) {
+          try {
+            const connected = await connect();
+            if (!connected) {
+              setError(
+                "시리얼 포트 연결 실패\n포트를 선택하거나 연결 상태를 확인해주세요."
+              );
+              return false;
+            }
+          } catch (connectErr) {
+            // 연결 시도 중 예외 발생 (사용자가 취소한 경우 등)
             setError(
-              "시리얼 포트 연결 실패\n포트를 선택하거나 연결 상태를 확인해주세요."
+              "시리얼 포트 연결 취소\n포트 선택이 취소되었거나 연결할 수 없습니다."
             );
             return false;
           }
@@ -242,27 +269,40 @@ export const useSerialPort = (): SerialPortHook => {
             return false;
           }
 
-          // receive 단계 시작 알림
-          if (onProgress) {
-            onProgress(i, commands.length, "receive");
-          }
-
           // receive가 있으면 응답 대기, 없으면 duration만큼 대기
           if (command.receive && command.receive.trim() !== "") {
-            const receiveSuccess = await waitForReceive(
-              command.receive,
-              command.duration * 1000
-            );
-            if (!receiveSuccess) {
-              setError(
-                `[${i + 1}/${commands.length}] 응답 수신 실패\n기대 응답: ${
-                  command.receive
-                }\n대기 시간: ${command.duration}초 초과`
+            // 일반 신호: 예상신호와 일치할 때까지 계속 대기
+            let receiveSuccess = false;
+            while (!receiveSuccess) {
+              const result = await waitForReceive(
+                command.receive,
+                command.duration * 1000,
+                command.send
               );
-              return false;
+              receiveSuccess = result.success;
+
+              // receive 단계 알림 (실제 응답 데이터 전달)
+              if (onProgress) {
+                onProgress(i, commands.length, "receive", result.receivedData);
+              }
+
+              if (!receiveSuccess) {
+                // 불일치 시 duration 시간만큼 대기 후 재시도
+                if (globalTestConfig.debugMode) {
+                  console.log(
+                    `  ⚠ 응답 불일치, ${command.duration}초 후 재시도...`
+                  );
+                }
+                await new Promise((resolve) =>
+                  setTimeout(resolve, command.duration * 1000)
+                );
+              }
             }
           } else {
             // receive가 없으면 duration만큼 대기
+            if (onProgress) {
+              onProgress(i, commands.length, "receive");
+            }
             await new Promise((resolve) =>
               setTimeout(resolve, command.duration * 1000)
             );

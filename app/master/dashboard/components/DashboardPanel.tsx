@@ -10,7 +10,7 @@ import { RobotCodeSelectorModal } from "@/components/ui/robot-code-selector-moda
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { EquipmentStatusData, AdminButton } from "./types";
-import { useSerialPort } from "./hooks/useSerialPort";
+import { useActionMode } from "./hooks/useActionMode";
 import { useTemperature } from "./hooks/useTemperature";
 import { useDeviceStatus } from "./hooks/useDeviceStatus";
 
@@ -39,12 +39,19 @@ export default function DashboardPanel() {
   const [errorTitle, setErrorTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isRobotCodeModalOpen, setIsRobotCodeModalOpen] = useState(false);
+  const [currentSendSignal, setCurrentSendSignal] = useState<string>("-");
+  const [currentExpectedSignal, setCurrentExpectedSignal] =
+    useState<string>("-");
+  const [currentReceiveSignal, setCurrentReceiveSignal] = useState<string>("-");
+  const [allSendSignals, setAllSendSignals] = useState<string[]>([]);
+  const [currentCommandIndex, setCurrentCommandIndex] = useState<number>(-1);
+  const [originalCommandCount, setOriginalCommandCount] = useState<number>(0);
 
   // 중복 요청 방지를 위한 ref
   const hasSavedInitialData = useRef(false);
 
-  // Serial Port 훅 사용
-  const { executeCommandSequence, error: serialError } = useSerialPort();
+  // Action Mode 훅 사용 (환경변수에 따라 테스트/실제 모드 선택)
+  const { executeCommandSequence, error: serialError } = useActionMode();
 
   // Temperature 훅 사용
   const {
@@ -316,10 +323,54 @@ export default function DashboardPanel() {
     setIsProcessing(true);
     setProgress(0);
 
+    // 초기화
+    setAllSendSignals(["(SB1P)"]);
+    setCurrentCommandIndex(-1);
+    setOriginalCommandCount(1);
+    setCurrentSendSignal("-");
+    setCurrentExpectedSignal("-");
+    setCurrentReceiveSignal("-");
+
     try {
       // 프로그레스 시작
-      setProgress(30);
+      setProgress(20);
 
+      // 1단계: 시리얼 통신으로 (SB1P) 전송
+      setCurrentSendSignal("(SB1P)");
+      setCurrentExpectedSignal("-");
+      setCurrentCommandIndex(0);
+
+      const commandSequence = [
+        {
+          send: "(SB1P)",
+          receive: null,
+          duration: 1,
+        },
+      ];
+
+      const serialSuccess = await executeCommandSequence(
+        commandSequence,
+        (commandIndex, totalCommands, stepInCommand, actualReceive) => {
+          if (stepInCommand === "send") {
+            setCurrentSendSignal("(SB1P)");
+          } else {
+            setCurrentReceiveSignal(actualReceive || "-");
+          }
+        },
+        "중량 초기화"
+      );
+
+      if (!serialSuccess) {
+        setErrorTitle("시리얼 통신 오류");
+        setErrorMessage(serialError || "시리얼 통신 중 오류가 발생했습니다.");
+        setShowErrorAfterProgress(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      setProgress(60);
+
+      // 2단계: DB 중량 초기화
       const response = await fetch("/api/equipment/reset-weight", {
         method: "POST",
         headers: {
@@ -328,7 +379,7 @@ export default function DashboardPanel() {
         body: JSON.stringify({ robot_code: robotCode }),
       });
 
-      setProgress(60);
+      setProgress(80);
 
       const result = await response.json();
 
@@ -341,7 +392,6 @@ export default function DashboardPanel() {
       }
 
       setProgress(100);
-      // toast.success("중량이 초기화되었습니다.");
 
       // 장비 상태 업데이트
       await fetchEquipmentStatus();
@@ -376,31 +426,63 @@ export default function DashboardPanel() {
       duration: cmd.duration || 0,
     }));
 
+    // 전체 송신신호 리스트 설정
+    const sendSignals = commandSequence.map((cmd) => cmd.send);
+    setAllSendSignals(sendSignals);
+    setCurrentCommandIndex(-1);
+    setOriginalCommandCount(sendSignals.length);
+
     // 총 단계 수 계산: 각 명령마다 send + receive(또는 duration 대기) = 2단계
     const totalSteps = commandSequence.length * 2;
 
-    // 순차 실행
-    const success = await executeCommandSequence(
-      commandSequence,
-      (commandIndex, totalCommands, stepInCommand) => {
-        // 현재 단계 계산: 명령 인덱스 * 2 + (send=0, receive=1)
-        const currentStep =
-          commandIndex * 2 + (stepInCommand === "send" ? 0 : 1);
-        const progressPercent = Math.round((currentStep / totalSteps) * 100);
-        setProgress(progressPercent);
+    try {
+      // 순차 실행 (버튼명 전달)
+      const success = await executeCommandSequence(
+        commandSequence,
+        (commandIndex, totalCommands, stepInCommand, actualReceive) => {
+          // 현재 단계 계산: 명령 인덱스 * 2 + (send=0, receive=1)
+          const currentStep =
+            commandIndex * 2 + (stepInCommand === "send" ? 0 : 1);
+          const progressPercent = Math.round((currentStep / totalSteps) * 100);
+          setProgress(progressPercent);
+
+          // 현재 명령 인덱스 업데이트
+          setCurrentCommandIndex(commandIndex);
+
+          // 현재 송신/예상/수신 신호 업데이트
+          const currentCommand = commandSequence[commandIndex];
+          if (stepInCommand === "send") {
+            setCurrentSendSignal(currentCommand.send || "-");
+            setCurrentExpectedSignal(currentCommand.receive || "-");
+            setCurrentReceiveSignal("-"); // 송신 시작 시 수신 신호 초기화
+          } else {
+            // actualReceive가 있으면 사용 (테스트 모드의 mock 응답 또는 실제 응답)
+            setCurrentReceiveSignal(actualReceive || "-");
+          }
+        },
+        button.name
+      );
+
+      if (success) {
+        // 성공 시에만 100%로 설정
+        setProgress(100);
+
+        // 장비 상태 업데이트
+        await fetchEquipmentStatus();
+      } else {
+        // 실패 시 오류 처리
+        setErrorTitle("시리얼 통신 오류");
+        setErrorMessage(serialError || "명령 실행에 실패했습니다.");
+        setShowErrorAfterProgress(true);
       }
-    );
-
-    if (success) {
-      // 성공 시에만 100%로 설정
-      setProgress(100);
-
-      // 장비 상태 업데이트
-      await fetchEquipmentStatus();
-    } else {
-      // 실패 시 오류 처리
+    } catch (error) {
+      // 예외 발생 시에도 에러 메시지만 표시하고 모달은 유지
       setErrorTitle("시리얼 통신 오류");
-      setErrorMessage(serialError || "명령 실행에 실패했습니다.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "명령 실행 중 오류가 발생했습니다."
+      );
       setShowErrorAfterProgress(true);
     }
 
@@ -667,6 +749,12 @@ export default function DashboardPanel() {
         progress={progress}
         status={isProcessing ? "진행중" : "완료"}
         robotCode={robotCode}
+        sendSignal={currentSendSignal}
+        expectedSignal={currentExpectedSignal}
+        receiveSignal={currentReceiveSignal}
+        allSendSignals={allSendSignals}
+        currentCommandIndex={currentCommandIndex}
+        originalCommandCount={originalCommandCount}
       />
 
       <ErrorModal

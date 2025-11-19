@@ -32,7 +32,11 @@ export default function ActionButtons() {
   const bucketMoveCommandRef = useRef<string | null>(null);
 
   // Action Mode 훅 사용 (환경변수에 따라 테스트/실제 모드 선택)
-  const { executeCommandSequence, error: serialError } = useActionMode();
+  const {
+    executeCommandSequence,
+    cancelExecution,
+    error: serialError,
+  } = useActionMode();
 
   // localStorage에서 robot_code 가져오기
   useEffect(() => {
@@ -125,10 +129,20 @@ export default function ActionButtons() {
   // 버튼 클릭 핸들러
   const handleButtonClick = useCallback(
     async (button: ButtonWithCommands) => {
+      // 진행 상태 완전 초기화
+      setProgress(0);
+      setCurrentSendSignal("-");
+      setCurrentExpectedSignal("-");
+      setCurrentReceiveSignal("-");
+      setCurrentCommandIndex(-1);
+      setAllSendSignals([]);
+      setOriginalCommandCount(0);
+      bucketMoveCommandRef.current = null;
+
+      // 모달 열기
       setModalTitle(button.name);
       setIsModalOpen(true);
       setIsProcessing(true);
-      setProgress(0);
 
       if (button.commands.length === 0) {
         setErrorTitle("명령 오류");
@@ -325,6 +339,22 @@ export default function ActionButtons() {
     setIsProcessing(false);
   }, []);
 
+  const handleCancelModal = useCallback(() => {
+    cancelExecution();
+    setIsProcessing(false);
+    setIsModalOpen(false);
+
+    // 진행 상태 초기화
+    setProgress(0);
+    setCurrentSendSignal("-");
+    setCurrentExpectedSignal("-");
+    setCurrentReceiveSignal("-");
+    setCurrentCommandIndex(-1);
+    setAllSendSignals([]);
+    setOriginalCommandCount(0);
+    bucketMoveCommandRef.current = null;
+  }, [cancelExecution]);
+
   const handleCloseModal = useCallback(async () => {
     setIsModalOpen(false);
     setIsProcessing(false);
@@ -449,6 +479,7 @@ export default function ActionButtons() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onComplete={handleCompleteModal}
+        onCancel={handleCancelModal}
         title={modalTitle}
         subtitle="작업이 진행중입니다. 잠시만 기다려주세요."
         progress={progress}

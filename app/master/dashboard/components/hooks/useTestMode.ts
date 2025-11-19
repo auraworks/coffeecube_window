@@ -1,64 +1,9 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
   getNextMockResponse,
   resetResponseIndex,
   globalTestConfig,
 } from "./testConfig";
-
-// IWRP 응답 처리 함수
-async function handleIWRPResponse(response: string): Promise<void> {
-  try {
-    // (xxxx) 형식에서 숫자 추출
-    const match = response.match(/\((\d+)\)/);
-    if (!match || !match[1]) {
-      return;
-    }
-
-    const weightGrams = parseInt(match[1], 10);
-    if (isNaN(weightGrams) || weightGrams <= 0) {
-      return;
-    }
-
-    // robot_code 가져오기
-    const robotCode = localStorage.getItem("robot_code");
-    if (!robotCode) {
-      return;
-    }
-
-    // API 호출하여 중량 업데이트
-    const apiResponse = await fetch("/api/equipment/update-weight", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        robot_code: robotCode,
-        weight_grams: weightGrams,
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errorData = await apiResponse.json();
-      if (globalTestConfig.debugMode) {
-        console.error(
-          "중량 업데이트 실패:",
-          errorData.message || "알 수 없는 오류"
-        );
-      }
-    } else {
-      // 성공 시 화면 업데이트를 위한 이벤트 발생
-      const updateEvent = new CustomEvent("weight_updated", {
-        detail: { weightGrams, robotCode },
-      });
-      window.dispatchEvent(updateEvent);
-    }
-  } catch (error) {
-    // 에러가 발생해도 시리얼 통신은 계속 진행
-    if (globalTestConfig.debugMode) {
-      console.error("IWRP 응답 처리 중 오류:", error);
-    }
-  }
-}
 
 interface CommandSequence {
   send: string;
@@ -81,7 +26,6 @@ interface TestModeHook {
     ) => void,
     buttonName?: string
   ) => Promise<boolean>;
-  cancelExecution: () => void;
   error: string | null;
 }
 
@@ -92,7 +36,6 @@ interface TestModeHook {
 export const useTestMode = (): TestModeHook => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isCancelledRef = useRef(false);
 
   const connect = useCallback(async (): Promise<boolean> => {
     // 테스트 모드에서는 즉시 연결 성공
@@ -129,13 +72,6 @@ export const useTestMode = (): TestModeHook => {
     [isConnected, connect]
   );
 
-  const cancelExecution = useCallback(() => {
-    isCancelledRef.current = true;
-    if (globalTestConfig.debugMode) {
-      console.log("[테스트 모드] 명령 실행 취소 요청");
-    }
-  }, []);
-
   const executeCommandSequence = useCallback(
     async (
       commands: CommandSequence[],
@@ -147,9 +83,6 @@ export const useTestMode = (): TestModeHook => {
       ) => void,
       buttonName?: string
     ): Promise<boolean> => {
-      // 취소 플래그 초기화
-      isCancelledRef.current = false;
-
       // 테스트 모드에서는 자동 연결
       if (!isConnected) {
         await connect();
@@ -168,15 +101,6 @@ export const useTestMode = (): TestModeHook => {
 
       // 명령어 순차 실행 시뮬레이션
       for (let i = 0; i < commands.length; i++) {
-        // 취소 확인
-        if (isCancelledRef.current) {
-          if (globalTestConfig.debugMode) {
-            console.log("[테스트 모드] 명령 실행 취소됨");
-          }
-          setError("사용자가 작업을 취소했습니다.");
-          return false;
-        }
-
         const command = commands[i];
 
         // 다음 Mock 응답 가져오기 (버튼별로)
@@ -220,28 +144,7 @@ export const useTestMode = (): TestModeHook => {
           onProgress(i, commands.length, "receive", mockResponse.receive);
         }
 
-        // IWRP 신호인 경우 응답 형식만 확인 (API 호출은 ActionButtons에서 처리)
-        if (command.send === "IWRP" || command.send === "(IWRP)") {
-          // IWRP는 (xxxx) 형식만 확인하고 다음으로 진행
-          const iwrpMatch = mockResponse.receive.match(/\(\d+\)/);
-          if (iwrpMatch) {
-            if (globalTestConfig.debugMode) {
-              console.log(`  ✓ IWRP 응답 수신: ${mockResponse.receive}`);
-              console.log(`  ℹ IWRP API 호출은 ActionButtons에서 처리됨`);
-            }
-            // API 호출은 ActionButtons의 onProgress 콜백에서 처리
-            // 다음 명령으로 진행 (receive 검증 건너뛰기)
-            continue;
-          } else {
-            // IWRP 형식이 아니면 실패
-            setError(
-              `[테스트 모드] IWRP 응답 형식 오류\n기대 형식: (숫자)\n실제 수신: ${mockResponse.receive}`
-            );
-            return false;
-          }
-        }
-
-        // DB에 설정된 receive 값과 mock 응답 비교 (IWRP가 아닌 경우만)
+        // DB에 설정된 receive 값과 mock 응답 비교
         if (command.receive && command.receive.trim() !== "") {
           // 예상신호와 일치할 때까지 계속 대기
           while (mockResponse.receive !== command.receive) {
@@ -286,7 +189,6 @@ export const useTestMode = (): TestModeHook => {
     disconnect,
     sendCommand,
     executeCommandSequence,
-    cancelExecution,
     error,
   };
 };

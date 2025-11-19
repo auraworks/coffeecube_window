@@ -7,6 +7,7 @@ interface ProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete?: () => void;
+  onCancel?: () => void;
   title?: string;
   subtitle?: string;
   progress?: number;
@@ -26,6 +27,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
       isOpen,
       onClose,
       onComplete,
+      onCancel,
       title = "장비명령 1",
       subtitle = "작업이 진행중입니다. 잠시만 기다려주세요.",
       progress: initialProgress = 0,
@@ -42,10 +44,10 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
   ) => {
     const [isCompleted, setIsCompleted] = React.useState(false);
 
+    // 모달이 열릴 때마다 완료 상태 초기화
     React.useEffect(() => {
-      if (!isOpen) {
+      if (isOpen) {
         setIsCompleted(false);
-        return;
       }
     }, [isOpen]);
 
@@ -358,19 +360,25 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
                   </div>
                 </div>
 
-                <button
-                  onClick={onClose}
-                  disabled={!isCompleted}
-                  className={`flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl transition-colors max-sm:p-5 ${
-                    isCompleted
-                      ? "bg-primary hover:bg-primary/90 cursor-pointer"
-                      : "bg-gray-400 cursor-not-allowed opacity-50"
-                  }`}
-                >
-                  <div className="relative text-xl font-black leading-7 text-center text-white max-sm:text-lg">
-                    {isCompleted ? "확인" : "진행중..."}
-                  </div>
-                </button>
+                {isCompleted ? (
+                  <button
+                    onClick={onClose}
+                    className="flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl transition-colors max-sm:p-5 bg-primary hover:bg-primary/90 cursor-pointer"
+                  >
+                    <div className="relative text-xl font-black leading-7 text-center text-white max-sm:text-lg">
+                      확인
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={onCancel}
+                    className="flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl transition-colors max-sm:p-5 bg-red-500 hover:bg-red-600 cursor-pointer"
+                  >
+                    <div className="relative text-xl font-black leading-7 text-center text-white max-sm:text-lg">
+                      취소
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
           </div>

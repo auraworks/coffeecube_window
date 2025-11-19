@@ -22,12 +22,14 @@ interface SerialPortHook {
     ) => void,
     buttonName?: string
   ) => Promise<boolean>;
+  cancelExecution: () => void;
   error: string | null;
 }
 
 export const useSerialPort = (): SerialPortHook => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isCancelledRef = useRef(false);
   const portRef = useRef<SerialPort | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(
     null
@@ -284,6 +286,13 @@ export const useSerialPort = (): SerialPortHook => {
     []
   );
 
+  const cancelExecution = useCallback(() => {
+    isCancelledRef.current = true;
+    if (globalTestConfig.debugMode) {
+      console.log("[실제 모드] 명령 실행 취소 요청");
+    }
+  }, []);
+
   const executeCommandSequence = useCallback(
     async (
       commands: CommandSequence[],
@@ -295,6 +304,9 @@ export const useSerialPort = (): SerialPortHook => {
       ) => void,
       buttonName?: string
     ): Promise<boolean> => {
+      // 취소 플래그 초기화
+      isCancelledRef.current = false;
+
       try {
         // 연결 확인
         if (!writerRef.current || !isConnected) {
@@ -317,6 +329,15 @@ export const useSerialPort = (): SerialPortHook => {
 
         // 명령어 순차 실행
         for (let i = 0; i < commands.length; i++) {
+          // 취소 확인
+          if (isCancelledRef.current) {
+            if (globalTestConfig.debugMode) {
+              console.log("[실제 모드] 명령 실행 취소됨");
+            }
+            setError("사용자가 작업을 취소했습니다.");
+            return false;
+          }
+
           const command = commands[i];
 
           // send 단계 시작 알림
@@ -425,6 +446,7 @@ export const useSerialPort = (): SerialPortHook => {
     disconnect,
     sendCommand,
     executeCommandSequence,
+    cancelExecution,
     error,
   };
 };
