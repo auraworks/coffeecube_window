@@ -17,10 +17,11 @@ interface SerialPortHook {
     onProgress?: (
       currentCommandIndex: number,
       totalCommands: number,
-      stepInCommand: "send" | "receive",
+      stepInCommand: "send" | "receive" | "duration_complete",
       actualReceive?: string
     ) => void,
-    buttonName?: string
+    buttonName?: string,
+    abortSignal?: AbortSignal
   ) => Promise<boolean>;
   error: string | null;
 }
@@ -224,10 +225,11 @@ export const useSerialPort = (): SerialPortHook => {
       onProgress?: (
         currentCommandIndex: number,
         totalCommands: number,
-        stepInCommand: "send" | "receive",
+        stepInCommand: "send" | "receive" | "duration_complete",
         actualReceive?: string
       ) => void,
-      buttonName?: string
+      buttonName?: string,
+      abortSignal?: AbortSignal
     ): Promise<boolean> => {
       try {
         // 연결 확인
@@ -251,6 +253,12 @@ export const useSerialPort = (): SerialPortHook => {
 
         // 명령어 순차 실행
         for (let i = 0; i < commands.length; i++) {
+          // 취소 확인
+          if (abortSignal?.aborted) {
+            setError("명령이 취소되었습니다.");
+            return false;
+          }
+
           const command = commands[i];
 
           // send 단계 시작 알림
@@ -293,19 +301,57 @@ export const useSerialPort = (): SerialPortHook => {
                     `  ⚠ 응답 불일치, ${command.duration}초 후 재시도...`
                   );
                 }
-                await new Promise((resolve) =>
-                  setTimeout(resolve, command.duration * 1000)
-                );
+
+                // 취소 가능한 대기
+                await new Promise((resolve, reject) => {
+                  const timeout = setTimeout(resolve, command.duration * 1000);
+                  if (abortSignal) {
+                    abortSignal.addEventListener("abort", () => {
+                      clearTimeout(timeout);
+                      reject(new Error("취소됨"));
+                    });
+                  }
+                });
+
+                // 취소 확인
+                if (abortSignal?.aborted) {
+                  setError("명령이 취소되었습니다.");
+                  return false;
+                }
               }
+            }
+
+            // duration 대기 완료 알림
+            if (onProgress) {
+              onProgress(i, commands.length, "duration_complete");
             }
           } else {
             // receive가 없으면 duration만큼 대기
             if (onProgress) {
               onProgress(i, commands.length, "receive");
             }
-            await new Promise((resolve) =>
-              setTimeout(resolve, command.duration * 1000)
-            );
+
+            // 취소 가능한 대기
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(resolve, command.duration * 1000);
+              if (abortSignal) {
+                abortSignal.addEventListener("abort", () => {
+                  clearTimeout(timeout);
+                  reject(new Error("취소됨"));
+                });
+              }
+            });
+
+            // 취소 확인
+            if (abortSignal?.aborted) {
+              setError("명령이 취소되었습니다.");
+              return false;
+            }
+
+            // duration 대기 완료 알림
+            if (onProgress) {
+              onProgress(i, commands.length, "duration_complete");
+            }
           }
         }
 

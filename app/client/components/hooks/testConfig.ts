@@ -27,85 +27,55 @@ export const buttonMockResponses: Record<string, MockResponse[]> = {
   // 열기 버튼
   열기: [
     {
-      receive: "(ISNN) / (ISNF)",
+      receive: "(WTOK)",
       delayMs: 500,
       shouldSucceed: true,
     },
     {
-      receive: "(WTOK)",
+      receive: "",
       delayMs: 800,
       shouldSucceed: true,
     },
     {
-      receive: "",
+      receive: "(DSON)",
       delayMs: 600,
       shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
+    }
   ],
 
   // 한번더 버튼
   한번더: [
     {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
       receive: "(WTOK)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
       delayMs: 500,
       shouldSucceed: true,
     },
     {
       receive: "",
-      delayMs: 400,
+      delayMs: 800,
       shouldSucceed: true,
     },
     {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 500,
+      receive: "(DSON)",
+      delayMs: 600,
       shouldSucceed: true,
-    },
-    {
-      receive: "(DSON) / (DSOF)",
-      delayMs: 400,
-      shouldSucceed: true,
-    },
-    {
-      receive: "",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
+    }
   ],
 
   // 비상정지 버튼
   비상정지: [
     {
-      receive: "(STOP)",
+      receive: "",
+      delayMs: 300,
+      shouldSucceed: true,
+    },
+    {
+      receive: "",
+      delayMs: 300,
+      shouldSucceed: true,
+    },
+    {
+      receive: "",
       delayMs: 300,
       shouldSucceed: true,
     },
@@ -114,7 +84,7 @@ export const buttonMockResponses: Record<string, MockResponse[]> = {
   // 닫기 버튼
   닫기: [
     {
-      receive: "(DSON) / (DSOF)",
+      receive: "(DSCN)",
       delayMs: 500,
       shouldSucceed: true,
     },
@@ -124,45 +94,20 @@ export const buttonMockResponses: Record<string, MockResponse[]> = {
       shouldSucceed: true,
     },
     {
-      receive: "(DSCN) / (DSCF)",
+      receive: "(500)",
       delayMs: 600,
       shouldSucceed: true,
     },
     {
-      receive: "(DSCN) / (DSCF)",
+      receive: "(ISMN)",
       delayMs: 400,
       shouldSucceed: true,
     },
     {
-      receive: "",
+      receive: "(ISNN)",
       delayMs: 500,
       shouldSucceed: true,
-    },
-    {
-      receive: "(1000)", // IWRP 응답 - 15000g (15kg, bucket 전환 발생)
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISMN) / (ISMF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISMN) / (ISMF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
-    {
-      receive: "(ISNN) / (ISNF)",
-      delayMs: 500,
-      shouldSucceed: true,
-    },
+    }
   ],
 
   // 종료 버튼

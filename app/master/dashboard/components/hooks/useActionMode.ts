@@ -17,10 +17,11 @@ interface ActionModeHook {
     onProgress?: (
       currentCommandIndex: number,
       totalCommands: number,
-      stepInCommand: "send" | "receive",
+      stepInCommand: "send" | "receive" | "duration_complete",
       actualReceive?: string
     ) => void,
-    buttonName?: string
+    buttonName?: string,
+    abortSignal?: AbortSignal
   ) => Promise<boolean>;
   error: string | null;
 }

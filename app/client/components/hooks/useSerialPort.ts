@@ -390,6 +390,8 @@ export const useSerialPort = (): SerialPortHook => {
           } else if (command.receive && command.receive.trim() !== "") {
             // 일반 신호: 예상신호와 일치할 때까지 계속 대기
             let receiveSuccess = false;
+            let retryCount = 0;
+
             while (!receiveSuccess) {
               const result = await waitForReceive(
                 command.receive,
@@ -404,6 +406,7 @@ export const useSerialPort = (): SerialPortHook => {
               }
 
               if (!receiveSuccess) {
+                retryCount++;
                 // 불일치 시 duration 시간만큼 대기 후 재시도
                 if (globalTestConfig.debugMode) {
                   console.log(
@@ -412,6 +415,17 @@ export const useSerialPort = (): SerialPortHook => {
                 }
                 await new Promise((resolve) =>
                   setTimeout(resolve, command.duration * 1000)
+                );
+              }
+            }
+
+            // 신호가 첫 시도에 일치하면 duration 대기 없이 바로 진행
+            if (globalTestConfig.debugMode) {
+              if (retryCount === 0) {
+                console.log(`  ✓ 응답 일치, 다음 명령으로 진행`);
+              } else {
+                console.log(
+                  `  ✓ 응답 일치 (${retryCount}회 재시도 후), 다음 명령으로 진행`
                 );
               }
             }

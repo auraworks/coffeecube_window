@@ -39,12 +39,12 @@ export const buttonMockResponses: Record<string, MockResponse[]> = {
  */
 export const mockResponses: MockResponse[] = [
   {
-    receive: "(OK)",
+    receive: "(SS1P)",
     delayMs: 500,
     shouldSucceed: true,
   },
   {
-    receive: "(DONE)",
+    receive: "(OK)",
     delayMs: 800,
     shouldSucceed: true,
   },

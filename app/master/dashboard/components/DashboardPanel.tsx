@@ -50,6 +50,9 @@ export default function DashboardPanel() {
   // 중복 요청 방지를 위한 ref
   const hasSavedInitialData = useRef(false);
 
+  // 명령 실행 중단을 위한 ref
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Action Mode 훅 사용 (환경변수에 따라 테스트/실제 모드 선택)
   const { executeCommandSequence, error: serialError } = useActionMode();
 
@@ -331,6 +334,9 @@ export default function DashboardPanel() {
     setCurrentExpectedSignal("-");
     setCurrentReceiveSignal("-");
 
+    // AbortController 생성
+    abortControllerRef.current = new AbortController();
+
     try {
       // 프로그레스 시작
       setProgress(20);
@@ -432,17 +438,35 @@ export default function DashboardPanel() {
     setCurrentCommandIndex(-1);
     setOriginalCommandCount(sendSignals.length);
 
-    // 총 단계 수 계산: 각 명령마다 send + receive(또는 duration 대기) = 2단계
-    const totalSteps = commandSequence.length * 2;
+    // AbortController 생성
+    abortControllerRef.current = new AbortController();
+
+    // 총 단계 수 계산: 각 명령마다 send + receive + duration_complete = 3단계
+    const totalSteps = commandSequence.length * 3;
 
     try {
+      // 취소 확인
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+
       // 순차 실행 (버튼명 전달)
       const success = await executeCommandSequence(
         commandSequence,
         (commandIndex, totalCommands, stepInCommand, actualReceive) => {
-          // 현재 단계 계산: 명령 인덱스 * 2 + (send=0, receive=1)
+          // 취소 확인
+          if (abortControllerRef.current?.signal.aborted) {
+            return;
+          }
+
+          // 현재 단계 계산: 명령 인덱스 * 3 + (send=0, receive=1, duration_complete=2)
           const currentStep =
-            commandIndex * 2 + (stepInCommand === "send" ? 0 : 1);
+            commandIndex * 3 +
+            (stepInCommand === "send"
+              ? 0
+              : stepInCommand === "receive"
+              ? 1
+              : 2);
           const progressPercent = Math.round((currentStep / totalSteps) * 100);
           setProgress(progressPercent);
 
@@ -455,13 +479,20 @@ export default function DashboardPanel() {
             setCurrentSendSignal(currentCommand.send || "-");
             setCurrentExpectedSignal(currentCommand.receive || "-");
             setCurrentReceiveSignal("-"); // 송신 시작 시 수신 신호 초기화
-          } else {
+          } else if (stepInCommand === "receive") {
             // actualReceive가 있으면 사용 (테스트 모드의 mock 응답 또는 실제 응답)
             setCurrentReceiveSignal(actualReceive || "-");
           }
+          // duration_complete 단계에서는 신호 업데이트 없음
         },
-        button.name
+        button.name,
+        abortControllerRef.current?.signal
       );
+
+      // 취소 확인
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
 
       if (success) {
         // 성공 시에만 100%로 설정
@@ -476,6 +507,11 @@ export default function DashboardPanel() {
         setShowErrorAfterProgress(true);
       }
     } catch (error) {
+      // 취소된 경우 에러 표시 안함
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+
       // 예외 발생 시에도 에러 메시지만 표시하고 모달은 유지
       setErrorTitle("시리얼 통신 오류");
       setErrorMessage(
@@ -484,6 +520,8 @@ export default function DashboardPanel() {
           : "명령 실행 중 오류가 발생했습니다."
       );
       setShowErrorAfterProgress(true);
+    } finally {
+      abortControllerRef.current = null;
     }
 
     setIsProcessing(false);
@@ -502,6 +540,32 @@ export default function DashboardPanel() {
       }, 500);
     }
   }, [showErrorAfterProgress]);
+
+  const handleCancelCommand = useCallback(() => {
+    // 명령 실행 중단
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // 상태 초기화
+    setIsProcessing(false);
+    setProgress(0);
+    setCurrentSendSignal("-");
+    setCurrentExpectedSignal("-");
+    setCurrentReceiveSignal("-");
+    setAllSendSignals([]);
+    setCurrentCommandIndex(-1);
+    setOriginalCommandCount(0);
+
+    // 모달 닫기
+    setIsModalOpen(false);
+
+    toast.info("명령이 취소되었습니다.", {
+      duration: 2000,
+      position: "top-center",
+    });
+  }, []);
 
   const handleCloseErrorModal = () => {
     setIsErrorModalOpen(false);
@@ -744,6 +808,7 @@ export default function DashboardPanel() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onComplete={handleCompleteModal}
+        onCancel={handleCancelCommand}
         title={modalTitle}
         subtitle="작업이 진행중입니다. 잠시만 기다려주세요."
         progress={progress}

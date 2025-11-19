@@ -1,14 +1,18 @@
 "use client";
 
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressModal } from "@/components/ui/progress-modal";
 import { ErrorModal } from "@/components/ui/error-modal";
+import { createClient } from "@/lib/supabase/client";
 import { useActionMode } from "./hooks/useActionMode";
 import type { ButtonWithCommands } from "./types";
 
 export default function ActionButtons() {
+  const router = useRouter();
   const [buttons, setButtons] = useState<ButtonWithCommands[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +41,12 @@ export default function ActionButtons() {
     cancelExecution,
     error: serialError,
   } = useActionMode();
+
+  const handleTerminateClick = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/master");
+  }, [router]);
 
   // localStorage에서 robot_code 가져오기
   useEffect(() => {
@@ -424,29 +434,85 @@ export default function ActionButtons() {
     );
   }
 
-  // 버튼을 3개씩 나누어 행으로 구성
+  const emergencyButton = buttons.find((button) => button.name === "비상종료");
+  const regularButtons = emergencyButton
+    ? buttons.filter((button) => button.button_no !== emergencyButton.button_no)
+    : buttons;
+
+  const renderRegularButton = (button: ButtonWithCommands) => {
+    const isTerminateButton = button.name === "종료";
+    if (isTerminateButton) {
+      return (
+        <Button
+          key={button.button_no}
+          className="h-[82px] font-bold rounded-[16px] bg-primary hover:bg-primary/90 text-white text-[24px] disabled:opacity-50"
+          onClick={handleTerminateClick}
+          disabled={isProcessing || isBucketFull || isDailyLimitReached}
+        >
+          {button.name}
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        key={button.button_no}
+        className="h-[82px] font-bold rounded-[16px] bg-primary hover:bg-primary/90 text-white text-[24px] disabled:opacity-50"
+        onClick={() => handleButtonClick(button)}
+        disabled={isProcessing || isBucketFull || isDailyLimitReached}
+      >
+        {button.name}
+      </Button>
+    );
+  };
+
+  // 버튼을 3개씩 나누어 행으로 구성 (비상종료 버튼이 없을 때 사용)
   const buttonRows: ButtonWithCommands[][] = [];
-  for (let i = 0; i < buttons.length; i += 3) {
-    buttonRows.push(buttons.slice(i, i + 3));
+  if (!emergencyButton) {
+    for (let i = 0; i < regularButtons.length; i += 3) {
+      buttonRows.push(regularButtons.slice(i, i + 3));
+    }
   }
 
   return (
     <>
       <div className="relative flex flex-col gap-4 w-full">
-        {buttonRows.map((row, rowIndex) => (
-          <div key={rowIndex} className="flex flex-row gap-4 w-full">
-            {row.map((button) => (
-              <Button
-                key={button.button_no}
-                className="flex-1 h-[82px] font-bold rounded-[16px] bg-primary hover:bg-primary/90 text-white text-[24px] disabled:opacity-50"
-                onClick={() => handleButtonClick(button)}
-                disabled={isProcessing || isBucketFull || isDailyLimitReached}
-              >
-                {button.name}
-              </Button>
-            ))}
+        {emergencyButton ? (
+          <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6 items-stretch max-lg:grid-cols-1">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+              {regularButtons.length > 0 ? (
+                regularButtons.map((button) => renderRegularButton(button))
+              ) : (
+                <div className="col-span-2 h-[82px] rounded-[16px] bg-zinc-100 flex items-center justify-center text-lg font-semibold text-zinc-500 max-sm:col-span-1">
+                  다른 명령 버튼이 없습니다.
+                </div>
+              )}
+            </div>
+
+            <Button
+              key={emergencyButton.button_no}
+              className="w-full h-full min-h-[200px] font-extrabold rounded-[24px] text-white text-[28px] bg-[#D7373F] hover:bg-[#bf1f28] focus-visible:ring-red-400 disabled:opacity-50"
+              onClick={
+                emergencyButton.name === "종료"
+                  ? handleTerminateClick
+                  : () => handleButtonClick(emergencyButton)
+              }
+              disabled={isProcessing || isBucketFull || isDailyLimitReached}
+            >
+              {emergencyButton.name}
+            </Button>
           </div>
-        ))}
+        ) : (
+          buttonRows.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex flex-row gap-4 w-full">
+              {row.map((button) => (
+                <div key={button.button_no} className="flex-1">
+                  {renderRegularButton(button)}
+                </div>
+              ))}
+            </div>
+          ))
+        )}
 
         {isBucketFull && (
           <div className="absolute inset-0 bg-red-500/95 text-white flex items-center justify-center rounded-[16px] backdrop-blur-sm z-10">

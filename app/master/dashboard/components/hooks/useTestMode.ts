@@ -21,10 +21,11 @@ interface TestModeHook {
     onProgress?: (
       currentCommandIndex: number,
       totalCommands: number,
-      stepInCommand: "send" | "receive",
+      stepInCommand: "send" | "receive" | "duration_complete",
       actualReceive?: string
     ) => void,
-    buttonName?: string
+    buttonName?: string,
+    abortSignal?: AbortSignal
   ) => Promise<boolean>;
   error: string | null;
 }
@@ -78,10 +79,11 @@ export const useTestMode = (): TestModeHook => {
       onProgress?: (
         currentCommandIndex: number,
         totalCommands: number,
-        stepInCommand: "send" | "receive",
+        stepInCommand: "send" | "receive" | "duration_complete",
         actualReceive?: string
       ) => void,
-      buttonName?: string
+      buttonName?: string,
+      abortSignal?: AbortSignal
     ): Promise<boolean> => {
       // 테스트 모드에서는 자동 연결
       if (!isConnected) {
@@ -101,6 +103,12 @@ export const useTestMode = (): TestModeHook => {
 
       // 명령어 순차 실행 시뮬레이션
       for (let i = 0; i < commands.length; i++) {
+        // 취소 확인
+        if (abortSignal?.aborted) {
+          setError("명령이 취소되었습니다.");
+          return false;
+        }
+
         const command = commands[i];
 
         // 다음 Mock 응답 가져오기 (버튼별로)
@@ -113,6 +121,7 @@ export const useTestMode = (): TestModeHook => {
           console.log(`  Receive (Mock): ${mockResponse.receive}`);
           console.log(`  Should Succeed: ${mockResponse.shouldSucceed}`);
           console.log(`  Delay: ${mockResponse.delayMs}ms`);
+          console.log(`  Duration: ${command.duration}초`);
         }
 
         // send 단계 시작 알림
@@ -166,6 +175,34 @@ export const useTestMode = (): TestModeHook => {
               break;
             }
           }
+        }
+
+        // duration 대기 시뮬레이션
+        if (globalTestConfig.debugMode) {
+          console.log(`  ⏳ duration ${command.duration}초 대기 중...`);
+        }
+
+        // 취소 가능한 대기
+        try {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(resolve, command.duration * 1000);
+            if (abortSignal) {
+              abortSignal.addEventListener("abort", () => {
+                clearTimeout(timeout);
+                reject(new Error("취소됨"));
+              });
+            }
+          });
+        } catch (err) {
+          if (abortSignal?.aborted) {
+            setError("명령이 취소되었습니다.");
+            return false;
+          }
+        }
+
+        // duration 대기 완료 알림
+        if (onProgress) {
+          onProgress(i, commands.length, "duration_complete");
         }
 
         if (globalTestConfig.debugMode) {

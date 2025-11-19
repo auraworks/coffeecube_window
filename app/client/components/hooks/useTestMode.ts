@@ -244,7 +244,9 @@ export const useTestMode = (): TestModeHook => {
         // DB에 설정된 receive 값과 mock 응답 비교 (IWRP가 아닌 경우만)
         if (command.receive && command.receive.trim() !== "") {
           // 예상신호와 일치할 때까지 계속 대기
-          while (mockResponse.receive !== command.receive) {
+          let isMatched = mockResponse.receive === command.receive;
+
+          while (!isMatched) {
             if (globalTestConfig.debugMode) {
               console.log(
                 `  ⚠ 응답 불일치: 기대=${command.receive}, 실제=${mockResponse.receive}`
@@ -259,9 +261,15 @@ export const useTestMode = (): TestModeHook => {
             );
             // 다음 mock 응답 가져오기 (버튼별로)
             const newMockResponse = getNextMockResponse(buttonName);
-            if (newMockResponse.receive === command.receive) {
+            isMatched = newMockResponse.receive === command.receive;
+            if (isMatched) {
               break;
             }
+          }
+
+          // 신호가 첫 시도에 일치하면 duration 대기 없이 바로 진행
+          if (globalTestConfig.debugMode) {
+            console.log(`  ✓ 응답 일치, 다음 명령으로 진행`);
           }
         }
 
