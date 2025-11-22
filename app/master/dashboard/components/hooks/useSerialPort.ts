@@ -160,7 +160,19 @@ export const useSerialPort = (): SerialPortHook => {
 
   const sendCommand = useCallback(
     async (command: string, clearBuffer: boolean = true): Promise<boolean> => {
+      if (globalTestConfig.debugMode) {
+        console.log(
+          `[sendCommand 시작] command: ${command}, clearBuffer: ${clearBuffer}`
+        );
+      }
+
       try {
+        if (globalTestConfig.debugMode) {
+          console.log(
+            `[연결 상태 확인] writerRef: ${!!writerRef.current}, isConnected: ${isConnected}`
+          );
+        }
+
         if (!writerRef.current || !isConnected) {
           // 연결되어 있지 않으면 자동으로 연결 시도
           try {
@@ -181,8 +193,17 @@ export const useSerialPort = (): SerialPortHook => {
         }
 
         if (!writerRef.current) {
+          if (globalTestConfig.debugMode) {
+            console.log(`[오류] Writer가 없습니다`);
+          }
           setError("시리얼 포트 Writer 오류\n포트 연결을 다시 시도해주세요.");
           return false;
+        }
+
+        if (globalTestConfig.debugMode) {
+          console.log(
+            `[버퍼 비우기 시작] clearBuffer: ${clearBuffer}, readerRef: ${!!readerRef.current}`
+          );
         }
 
         // 버퍼 비우기 (기존 데이터 제거)
@@ -212,7 +233,13 @@ export const useSerialPort = (): SerialPortHook => {
           }
         }
 
+        if (globalTestConfig.debugMode) {
+          console.log(`[100ms 대기 시작]`);
+        }
         await new Promise((resolve) => setTimeout(resolve, 100));
+        if (globalTestConfig.debugMode) {
+          console.log(`[100ms 대기 완료]`);
+        }
 
         // 명령어를 바이트 배열로 변환 (\r\n 추가)
         const encoder = new TextEncoder();
@@ -221,14 +248,26 @@ export const useSerialPort = (): SerialPortHook => {
 
         // 명령 전송 로그 출력
         if (globalTestConfig.debugMode) {
-          console.log(`[송신] ${command}`);
+          console.log(`[송신 준비] ${command}, 바이트 길이: ${data.length}`);
         }
 
         // 데이터 전송
+        if (globalTestConfig.debugMode) {
+          console.log(`[write 호출 시작]`);
+        }
         await writerRef.current.write(data);
+        if (globalTestConfig.debugMode) {
+          console.log(`[write 호출 완료]`);
+        }
 
         // 디바이스 처리 시간 대기
+        if (globalTestConfig.debugMode) {
+          console.log(`[300ms 대기 시작]`);
+        }
         await new Promise((resolve) => setTimeout(resolve, 300));
+        if (globalTestConfig.debugMode) {
+          console.log(`[300ms 대기 완료]`);
+        }
 
         if (globalTestConfig.debugMode) {
           console.log(`[전송 완료, flush 완료]`);
@@ -239,6 +278,9 @@ export const useSerialPort = (): SerialPortHook => {
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "명령 전송에 실패했습니다.";
+        if (globalTestConfig.debugMode) {
+          console.error(`[sendCommand 오류]`, err);
+        }
         setError(errorMessage);
         return false;
       }
