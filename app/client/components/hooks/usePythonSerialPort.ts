@@ -311,6 +311,8 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
               );
               return false;
             }
+            // 예상 신호를 받았으므로 duration 대기 없이 바로 다음 단계로
+            continue;
           } else {
             // 일반 명령의 경우 응답 검증
             if (!result.success) {
@@ -321,13 +323,8 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
               );
               return false;
             }
-          }
-
-          // duration 대기 (예상 신호가 있는 경우만)
-          if (command.duration > 0) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, command.duration * 1000)
-            );
+            // 예상 신호를 받았으므로 duration 대기 없이 바로 다음 단계로
+            continue;
           }
         }
 
