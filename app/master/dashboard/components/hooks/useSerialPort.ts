@@ -59,7 +59,7 @@ export const useSerialPort = (): SerialPortHook => {
         port = await navigator.serial.requestPort();
       }
 
-      // 포트 열기
+      // 포트 열기 (9600,8,N,1)
       await port.open({
         baudRate: 9600,
         dataBits: 8,
@@ -69,6 +69,9 @@ export const useSerialPort = (): SerialPortHook => {
 
       portRef.current = port;
 
+      // 포트 안정화 대기
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Reader와 Writer 설정
       if (port.readable) {
         readerRef.current = port.readable.getReader();
@@ -77,8 +80,33 @@ export const useSerialPort = (): SerialPortHook => {
         writerRef.current = port.writable.getWriter();
       }
 
+      // 초기 버퍼 비우기
+      if (readerRef.current) {
+        try {
+          const clearStartTime = Date.now();
+          while (Date.now() - clearStartTime < 100) {
+            const { value, done } = await Promise.race([
+              readerRef.current.read(),
+              new Promise<{ value: undefined; done: true }>((resolve) =>
+                setTimeout(() => resolve({ value: undefined, done: true }), 50)
+              ),
+            ]);
+            if (done || !value) break;
+          }
+        } catch (err) {
+          if (globalTestConfig.debugMode) {
+            console.log("[초기 버퍼 비우기 실패]", err);
+          }
+        }
+      }
+
       setIsConnected(true);
       setError(null);
+
+      if (globalTestConfig.debugMode) {
+        console.log("[시리얼 포트 연결 성공] 9600,8,N,1");
+      }
+
       return true;
     } catch (err) {
       const errorMessage =
@@ -116,7 +144,7 @@ export const useSerialPort = (): SerialPortHook => {
   }, []);
 
   const sendCommand = useCallback(
-    async (command: string): Promise<boolean> => {
+    async (command: string, clearBuffer: boolean = true): Promise<boolean> => {
       try {
         if (!writerRef.current || !isConnected) {
           // 연결되어 있지 않으면 자동으로 연결 시도
@@ -142,17 +170,55 @@ export const useSerialPort = (): SerialPortHook => {
           return false;
         }
 
-        // 명령어를 바이트 배열로 변환
+        // 버퍼 비우기 (기존 데이터 제거)
+        if (clearBuffer && readerRef.current) {
+          try {
+            const clearStartTime = Date.now();
+            while (Date.now() - clearStartTime < 100) {
+              const { value, done } = await Promise.race([
+                readerRef.current.read(),
+                new Promise<{ value: undefined; done: true }>((resolve) =>
+                  setTimeout(
+                    () => resolve({ value: undefined, done: true }),
+                    50
+                  )
+                ),
+              ]);
+              if (done || !value) break;
+            }
+
+            if (globalTestConfig.debugMode) {
+              console.log("[버퍼 비우기 완료]");
+            }
+          } catch (err) {
+            if (globalTestConfig.debugMode) {
+              console.log("[버퍼 비우기 실패]", err);
+            }
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // 명령어를 바이트 배열로 변환 (\r\n 추가)
         const encoder = new TextEncoder();
-        const data = encoder.encode(command);
+        const commandWithCRLF = `${command}\r\n`;
+        const data = encoder.encode(commandWithCRLF);
 
         // 명령 전송 로그 출력
         if (globalTestConfig.debugMode) {
-          console.log(`[실제 모드 - 시리얼 송신] ${command}`);
+          console.log(`[송신] ${command}`);
         }
 
         // 데이터 전송
         await writerRef.current.write(data);
+
+        // 디바이스 처리 시간 대기
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        if (globalTestConfig.debugMode) {
+          console.log(`[전송 완료, flush 완료]`);
+        }
+
         setError(null);
         return true;
       } catch (err) {
@@ -179,6 +245,9 @@ export const useSerialPort = (): SerialPortHook => {
       const decoder = new TextDecoder();
       const startTime = Date.now();
       let buffer = "";
+      let lastDataTime = Date.now();
+      let receivedAnyData = false;
+      const responses: string[] = [];
 
       try {
         while (Date.now() - startTime < timeoutMs) {
@@ -190,21 +259,90 @@ export const useSerialPort = (): SerialPortHook => {
           ]);
 
           if (done || !value) {
-            // 짧은 대기 후 계속
+            // 데이터가 없으면 대기
             await new Promise((resolve) => setTimeout(resolve, 50));
+
+            // 응답을 받았고 0.5초간 추가 데이터가 없으면 즉시 종료
+            if (responses.length > 0 && Date.now() - lastDataTime > 500) {
+              break;
+            }
             continue;
           }
 
-          buffer += decoder.decode(value, { stream: true });
+          // 데이터 수신
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          lastDataTime = Date.now();
+          receivedAnyData = true;
+
+          // 디버그: 받은 원시 데이터 로깅
+          if (globalTestConfig.debugMode) {
+            console.log(`[수신 데이터] ${buffer}`);
+            console.log(`[버퍼 길이] ${buffer.length}`);
+          }
+
+          // 괄호로 묶인 응답 추출 (IDON) 형식
+          let startIdx = buffer.indexOf("(");
+          let endIdx = buffer.indexOf(")", startIdx);
+
+          while (startIdx !== -1 && endIdx !== -1) {
+            const response = buffer.substring(startIdx, endIdx + 1);
+
+            if (response) {
+              responses.push(response);
+              if (globalTestConfig.debugMode) {
+                console.log(`[수신] ${response}`);
+              }
+            }
+
+            // 처리한 부분 제거
+            buffer = buffer.substring(endIdx + 1);
+            startIdx = buffer.indexOf("(");
+            endIdx = buffer.indexOf(")", startIdx);
+          }
 
           // 일반 신호는 정확히 일치해야 함
-          if (buffer.includes(expectedReceive)) {
-            return { success: true, receivedData: buffer };
+          const matchedResponse = responses.find((r) =>
+            r.includes(expectedReceive)
+          );
+          if (matchedResponse) {
+            if (globalTestConfig.debugMode) {
+              console.log(`[응답 일치] ${matchedResponse}`);
+            }
+            return { success: true, receivedData: matchedResponse };
+          }
+        }
+
+        // 남은 버퍼 처리
+        if (buffer.trim()) {
+          if (globalTestConfig.debugMode) {
+            console.log(`[남은 버퍼] ${buffer}`);
           }
         }
 
         // 타임아웃 시 실제 수신한 데이터 표시
-        const receivedData = buffer.trim() || "(응답 없음)";
+        let receivedData = "";
+        if (responses.length > 0) {
+          receivedData = responses.join(", ");
+          if (globalTestConfig.debugMode) {
+            console.log(
+              `[응답 없음 - 데이터는 수신했으나 일치하지 않음] ${receivedData}`
+            );
+          }
+        } else if (receivedAnyData) {
+          receivedData = buffer.trim() || "(괄호 형식 없음)";
+          if (globalTestConfig.debugMode) {
+            console.log(
+              `[응답 없음 - 데이터는 수신했으나 괄호 형식 없음] ${receivedData}`
+            );
+          }
+        } else {
+          receivedData = "(응답 없음)";
+          if (globalTestConfig.debugMode) {
+            console.log(`[응답 없음 - 데이터 미수신]`);
+          }
+        }
+
         setError(
           `응답 대기 시간 초과\n기대 응답: ${expectedReceive}\n실제 수신: ${receivedData}`
         );
@@ -279,9 +417,33 @@ export const useSerialPort = (): SerialPortHook => {
 
           // receive가 있으면 응답 대기, 없으면 duration만큼 대기
           if (command.receive && command.receive.trim() !== "") {
-            // 일반 신호: 예상신호와 일치할 때까지 계속 대기
+            // 일반 신호: 예상신호와 일치할 때까지 재시도 (최대 3회)
             let receiveSuccess = false;
-            while (!receiveSuccess) {
+            let retryCount = 0;
+            const maxRetries = 3;
+
+            while (!receiveSuccess && retryCount < maxRetries) {
+              // 재시도 시 로그 출력
+              if (retryCount > 0) {
+                if (globalTestConfig.debugMode) {
+                  console.log(
+                    `[재시도 ${retryCount}/${maxRetries - 1}] 1초 후 재전송...`
+                  );
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // 명령 재전송
+                const resendSuccess = await sendCommand(command.send);
+                if (!resendSuccess) {
+                  setError(
+                    `[${i + 1}/${
+                      commands.length
+                    }] 명령 재전송 실패\n전송 명령: ${command.send}`
+                  );
+                  return false;
+                }
+              }
+
               const result = await waitForReceive(
                 command.receive,
                 command.duration * 1000,
@@ -295,29 +457,32 @@ export const useSerialPort = (): SerialPortHook => {
               }
 
               if (!receiveSuccess) {
-                // 불일치 시 duration 시간만큼 대기 후 재시도
-                if (globalTestConfig.debugMode) {
-                  console.log(
-                    `  ⚠ 응답 불일치, ${command.duration}초 후 재시도...`
-                  );
-                }
-
-                // 취소 가능한 대기
-                await new Promise((resolve, reject) => {
-                  const timeout = setTimeout(resolve, command.duration * 1000);
-                  if (abortSignal) {
-                    abortSignal.addEventListener("abort", () => {
-                      clearTimeout(timeout);
-                      reject(new Error("취소됨"));
-                    });
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                  // 모든 재시도 실패
+                  if (globalTestConfig.debugMode) {
+                    console.log(`✗ 응답 수신 실패 (총 ${maxRetries}회 시도)`);
                   }
-                });
-
-                // 취소 확인
-                if (abortSignal?.aborted) {
-                  setError("명령이 취소되었습니다.");
+                  setError(
+                    `[${i + 1}/${commands.length}] 응답 수신 실패\n기대 응답: ${
+                      command.receive
+                    }\n실제 수신: ${
+                      result.receivedData
+                    }\n총 ${maxRetries}회 시도`
+                  );
                   return false;
                 }
+              } else {
+                // 응답 수신 성공
+                if (globalTestConfig.debugMode) {
+                  console.log(`✓ 응답 수신 성공 (시도 ${retryCount + 1}회)`);
+                }
+              }
+
+              // 취소 확인
+              if (abortSignal?.aborted) {
+                setError("명령이 취소되었습니다.");
+                return false;
               }
             }
 
