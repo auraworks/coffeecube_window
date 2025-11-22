@@ -22,8 +22,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 전역 시리얼 포트 객체
+# 전역 시리얼 포트 객체 및 취소 플래그
 serial_port: Optional[serial.Serial] = None
+is_cancelled = False
 
 
 class CommandRequest(BaseModel):
@@ -74,13 +75,26 @@ async def list_ports():
 @app.post("/connect")
 async def connect_port(request: ConnectRequest):
     """시리얼 포트 연결"""
-    global serial_port
+    global serial_port, is_cancelled
+    
+    # 취소 플래그 초기화 (새로운 연결 시작)
+    is_cancelled = False
     
     try:
-        # 기존 연결 해제
-        if serial_port and serial_port.is_open:
-            serial_port.close()
-            serial_port = None
+        # 기존 연결 완전히 해제
+        if serial_port:
+            try:
+                if serial_port.is_open:
+                    serial_port.reset_input_buffer()
+                    serial_port.reset_output_buffer()
+                    serial_port.close()
+                serial_port = None
+            except Exception as e:
+                print(f"기존 포트 해제 중 오류 (무시): {e}")
+                serial_port = None
+        
+        # 포트 해제 후 대기
+        time.sleep(0.3)
         
         # 새 포트 연결
         serial_port = serial.Serial(
@@ -102,10 +116,17 @@ async def connect_port(request: ConnectRequest):
         
         time.sleep(0.5)  # 포트 안정화
         
-        # 초기 버퍼 완전히 비우기
-        serial_port.reset_input_buffer()
-        serial_port.reset_output_buffer()
-        time.sleep(0.1)
+        # 초기 버퍼 완전히 비우기 (여러 번 시도)
+        for _ in range(3):
+            serial_port.reset_input_buffer()
+            serial_port.reset_output_buffer()
+            time.sleep(0.05)
+            # 남아있는 데이터 완전히 제거
+            while serial_port.in_waiting > 0:
+                serial_port.read(serial_port.in_waiting)
+                time.sleep(0.05)
+        
+        time.sleep(0.2)
         
         return {
             "success": True,
@@ -119,16 +140,65 @@ async def connect_port(request: ConnectRequest):
         raise HTTPException(status_code=500, detail=f"연결 중 오류: {str(e)}")
 
 
+@app.post("/cancel")
+async def cancel_operation():
+    """진행 중인 작업 취소"""
+    global is_cancelled, serial_port
+    
+    is_cancelled = True
+    
+    # 시리얼 포트 버퍼 완전히 비우기
+    if serial_port and serial_port.is_open:
+        try:
+            # 여러 번 반복해서 버퍼 비우기
+            for _ in range(5):
+                serial_port.reset_input_buffer()
+                serial_port.reset_output_buffer()
+                time.sleep(0.05)
+                # 남아있는 데이터 완전히 제거
+                while serial_port.in_waiting > 0:
+                    serial_port.read(serial_port.in_waiting)
+                    time.sleep(0.05)
+            time.sleep(0.2)
+        except Exception as e:
+            print(f"버퍼 비우기 중 오류 (무시): {e}")
+    
+    return {"success": True, "message": "작업 취소 및 버퍼 초기화 완료"}
+
+
+@app.post("/reset")
+async def reset_cancel_flag():
+    """취소 플래그 초기화 (새로운 명령 시퀀스 시작 시 호출)"""
+    global is_cancelled
+    
+    is_cancelled = False
+    return {"success": True, "message": "취소 플래그 초기화 완료"}
+
+
 @app.post("/disconnect")
 async def disconnect_port():
     """시리얼 포트 연결 해제"""
-    global serial_port
+    global serial_port, is_cancelled
     
     try:
-        if serial_port and serial_port.is_open:
-            serial_port.close()
-            serial_port = None
-            return {"success": True, "message": "포트 연결 해제 성공"}
+        # 진행 중인 작업 취소
+        is_cancelled = True
+        time.sleep(0.2)  # 취소 플래그가 반영될 시간 대기
+        
+        if serial_port:
+            try:
+                if serial_port.is_open:
+                    # 버퍼 완전히 비우기
+                    serial_port.reset_input_buffer()
+                    serial_port.reset_output_buffer()
+                    time.sleep(0.1)
+                    serial_port.close()
+                serial_port = None
+                return {"success": True, "message": "포트 연결 해제 성공"}
+            except Exception as e:
+                print(f"포트 해제 중 오류: {e}")
+                serial_port = None
+                return {"success": True, "message": "포트 연결 해제 완료 (오류 무시)"}
         else:
             return {"success": True, "message": "연결된 포트가 없습니다"}
     
@@ -139,30 +209,51 @@ async def disconnect_port():
 @app.post("/send", response_model=CommandResponse)
 async def send_command(request: CommandRequest):
     """명령 전송 및 응답 수신 (재시도 포함)"""
-    global serial_port
+    global serial_port, is_cancelled
     
     if not serial_port or not serial_port.is_open:
         raise HTTPException(status_code=400, detail="시리얼 포트가 연결되어 있지 않습니다")
+    
+    # 취소 플래그 체크
+    if is_cancelled:
+        return CommandResponse(
+            success=False,
+            received_data="(취소됨)",
+            responses=["(작업이 취소되었습니다)"],
+            error="작업이 취소되었습니다"
+        )
     
     try:
         all_responses = []
         
         # 재시도 루프
         for attempt in range(request.max_retries):
+            # 각 재시도마다 취소 플래그 체크
+            if is_cancelled:
+                return CommandResponse(
+                    success=False,
+                    received_data="(취소됨)",
+                    responses=["(작업이 취소되었습니다)"],
+                    error="작업이 취소되었습니다"
+                )
             # 재시도 시 대기
             if attempt > 0:
                 time.sleep(1.0)  # 1초 대기
             
-            # 버퍼 비우기 (기존 데이터 제거)
-            serial_port.reset_input_buffer()
-            serial_port.reset_output_buffer()
-            
-            # 버퍼에 남은 데이터 완전히 제거
-            while serial_port.in_waiting > 0:
-                serial_port.read(serial_port.in_waiting)
+            # 버퍼 비우기 (기존 데이터 제거) - 여러 번 반복
+            for _ in range(2):
+                serial_port.reset_input_buffer()
+                serial_port.reset_output_buffer()
                 time.sleep(0.05)
             
-            time.sleep(0.1)
+            # 버퍼에 남은 데이터 완전히 제거
+            retry_count = 0
+            while serial_port.in_waiting > 0 and retry_count < 10:
+                serial_port.read(serial_port.in_waiting)
+                time.sleep(0.05)
+                retry_count += 1
+            
+            time.sleep(0.15)
             
             # 명령 전송
             command_bytes = f"{request.command}\r\n".encode('utf-8')
@@ -180,6 +271,15 @@ async def send_command(request: CommandRequest):
             received_any_data = False
             
             while (time.time() - start_time) < request.timeout:
+                # 취소 플래그 체크
+                if is_cancelled:
+                    return CommandResponse(
+                        success=False,
+                        received_data="(취소됨)",
+                        responses=["(작업이 취소되었습니다)"],
+                        error="작업이 취소되었습니다"
+                    )
+                
                 try:
                     # 데이터 읽기 (바이트 단위)
                     if serial_port.in_waiting > 0:
@@ -201,17 +301,23 @@ async def send_command(request: CommandRequest):
                                     response_bytes = buffer[start_idx:end_idx+1]
                                     response = response_bytes.decode('utf-8', errors='ignore').strip()
                                     
-                                    if response:
-                                        responses.append(response)
+                                    # if response:
+                                    #     # ===== 테스트용 (IWRP) 응답 변환 =====
+                                    #     # 실제 운영 시 아래 2줄을 주석 처리하세요 (HIDE)
+                                    #     if response == "(0000)":
+                                    #         response = "(1500)"
+                                    #     # ===== 테스트용 변환 끝 =====
+                                        
+                                    #     responses.append(response)
                                     
                                     # 처리한 부분 제거
                                     buffer = buffer[end_idx+1:]
                                 else:
                                     break
                     
-                    # 데이터가 없으면 대기
+                    # 데이터가 없으면 대기 (취소 즉시 반응을 위해 짧은 주기)
                     else:
-                        time.sleep(0.05)
+                        time.sleep(0.01)  # 취소 즉시 반응을 위해 10ms로 단축
                         
                         # 응답을 받았고 0.5초간 추가 데이터가 없으면 즉시 종료
                         if responses and (time.time() - last_data_time) > 0.5:

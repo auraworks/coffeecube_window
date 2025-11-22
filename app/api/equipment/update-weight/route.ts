@@ -23,14 +23,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { robot_code, weight_grams } = body;
+    const { robot_code, weight_grams, transaction_uuid } = body;
 
     // 필수 필드 검증
-    if (!robot_code || weight_grams === undefined) {
+    if (!robot_code || weight_grams === undefined || !transaction_uuid) {
       return NextResponse.json(
         {
           success: false,
-          error: "robot_code와 weight_grams가 필요합니다.",
+          error: "robot_code, weight_grams, transaction_uuid가 필요합니다.",
           message: "필수 필드가 누락되었습니다.",
         },
         { status: 400 }
@@ -233,7 +233,40 @@ export async function POST(request: NextRequest) {
       actualInputAmountKg = 2 - todayTotalAmountKg;
     }
 
-    // 투입 기록 생성
+    // transaction_uuid로 중복 체크
+    const { data: existingRecord, error: checkError } = await supabase
+      .from("input_records")
+      .select("id")
+      .eq("transaction_uuid", transaction_uuid)
+      .maybeSingle();
+
+    if (checkError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "중복 체크에 실패했습니다.",
+          message: checkError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    // 이미 같은 UUID로 기록이 있으면 중복 방지
+    if (existingRecord) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: "이미 처리된 요청입니다.",
+          data: {
+            robot_code,
+            isDuplicate: true,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // 투입 기록 생성 (transaction_uuid 포함)
     const { data: inputRecord, error: inputError } = await supabase
       .from("input_records")
       .insert({
@@ -242,6 +275,7 @@ export async function POST(request: NextRequest) {
         input_type: "coffee_bean", // IWRP는 원두 투입으로 가정
         input_date: today,
         robot_code: robot_code,
+        transaction_uuid: transaction_uuid,
       })
       .select()
       .single();

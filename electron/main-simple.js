@@ -13,17 +13,45 @@ const DEV_URL = "http://localhost:3000";
 // Python 서버 시작 함수
 function startPythonServer() {
   return new Promise((resolve, reject) => {
-    const serverPath = path.join(__dirname, "../server/main.py");
-    const pythonExecutable = isDev
-      ? "python"
-      : path.join(process.resourcesPath, "python", "python.exe");
+    if (isDev) {
+      // 개발 모드에서는 수동으로 실행한 서버 사용
+      console.log("Development mode: Using manually started Python server");
+      resolve();
+      return;
+    }
+
+    // 프로덕션 모드에서 Python 서버 시작
+    const isPackaged = app.isPackaged;
+    const appPath = isPackaged
+      ? path.join(process.resourcesPath, "app")
+      : app.getAppPath();
+
+    const serverExePath = path.join(
+      appPath,
+      "server",
+      "dist",
+      "serial-server.exe"
+    );
 
     console.log("Starting Python server...");
-    console.log("Python executable:", pythonExecutable);
-    console.log("Server path:", serverPath);
+    console.log("Server path:", serverExePath);
+
+    // 파일 존재 확인
+    const fs = require("fs");
+    if (!fs.existsSync(serverExePath)) {
+      console.error("ERROR: serial-server.exe not found at:", serverExePath);
+      console.warn("⚠ Python server will not be available");
+      resolve(); // 서버 없이도 계속 진행
+      return;
+    }
+    console.log("✓ serial-server.exe found");
 
     // Python 서버 실행
-    pythonProcess = spawn(pythonExecutable, [serverPath]);
+    pythonProcess = spawn(serverExePath, [], {
+      cwd: path.dirname(serverExePath),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true, // Windows에서 콘솔 창 숨김
+    });
 
     pythonProcess.stdout.on("data", (data) => {
       console.log(`[Python Server] ${data.toString()}`);
@@ -46,15 +74,42 @@ function startPythonServer() {
 
     pythonProcess.on("error", (err) => {
       console.error("Failed to start Python server:", err);
-      reject(err);
     });
 
-    // 2초 후에도 에러가 없으면 성공으로 간주
-    setTimeout(() => {
-      if (pythonProcess) {
-        resolve();
+    pythonProcess.on("exit", (code) => {
+      if (code !== 0 && code !== null) {
+        console.error(`Python server exited with code ${code}`);
       }
-    }, 2000);
+    });
+
+    // 서버가 실제로 준비될 때까지 대기
+    const checkServer = async () => {
+      const http = require("http");
+      for (let i = 0; i < 30; i++) {
+        try {
+          await new Promise((resolveCheck, rejectCheck) => {
+            const req = http.get("http://localhost:8000", (res) => {
+              resolveCheck();
+            });
+            req.on("error", rejectCheck);
+            req.setTimeout(1000, () => {
+              req.destroy();
+              rejectCheck(new Error("Timeout"));
+            });
+          });
+          console.log("✓ Python server is ready!");
+          resolve();
+          return;
+        } catch (err) {
+          console.log(`Waiting for Python server... (${i + 1}/30)`);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      console.warn("⚠ Python server failed to start (timeout)");
+      resolve(); // 타임아웃되어도 계속 진행
+    };
+
+    checkServer();
   });
 }
 

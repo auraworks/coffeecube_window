@@ -1,8 +1,9 @@
 const fs = require("fs-extra");
 const path = require("path");
 const { execSync } = require("child_process");
+const archiver = require("archiver");
 
-async function packageElectron() {
+async function packagePortable() {
   try {
     console.log("Step 1: Building Python server...");
     const serverDir = path.join(__dirname, "..", "server");
@@ -34,7 +35,7 @@ async function packageElectron() {
       { stdio: "inherit" }
     );
 
-    console.log("\nStep 5: Copying .next/standalone to packaged app...");
+    console.log("\nStep 5: Copying files to packaged app...");
     const rootDir = path.join(__dirname, "..");
     const standaloneSource = path.join(rootDir, ".next", "standalone");
     const packagedAppPath = path.join(
@@ -52,11 +53,9 @@ async function packageElectron() {
       );
     }
 
-    // .next/standalone 폴더 복사
     await fs.copy(standaloneSource, standaloneTarget, { overwrite: true });
     console.log("✓ Copied .next/standalone to packaged app");
 
-    // .next/static 폴더도 복사 (standalone 내부에 있어야 함)
     const staticSource = path.join(rootDir, ".next", "static");
     const staticTarget = path.join(standaloneTarget, ".next", "static");
     if (fs.existsSync(staticSource)) {
@@ -64,7 +63,6 @@ async function packageElectron() {
       console.log("✓ Copied .next/static to standalone");
     }
 
-    // public 폴더 복사 (standalone 내부에 있어야 함)
     const publicSource = path.join(rootDir, "public");
     const publicTarget = path.join(standaloneTarget, "public");
     if (fs.existsSync(publicSource)) {
@@ -72,7 +70,6 @@ async function packageElectron() {
       console.log("✓ Copied public to standalone");
     }
 
-    // .env.local 파일 복사 (있는 경우)
     const envSource = path.join(rootDir, ".env.local");
     const envTarget = path.join(packagedAppPath, ".env.local");
     if (fs.existsSync(envSource)) {
@@ -105,7 +102,6 @@ async function packageElectron() {
       );
     }
 
-    // node_modules 복사 (standalone에 필요한 경우)
     const nodeModulesSource = path.join(standaloneSource, "node_modules");
     const nodeModulesTarget = path.join(standaloneTarget, "node_modules");
     if (fs.existsSync(nodeModulesSource)) {
@@ -113,18 +109,42 @@ async function packageElectron() {
       console.log("✓ Copied node_modules to standalone");
     }
 
-    console.log("\n✅ Packaging completed successfully!");
-    console.log(
-      `📦 Packaged app location: ${path.join(
-        rootDir,
-        "dist",
-        "CoffeeCube-win32-x64"
-      )}`
-    );
+    console.log("\nStep 6: Creating portable ZIP archive...");
+    const distDir = path.join(rootDir, "dist");
+    const zipPath = path.join(distDir, "CoffeeCube-Portable.zip");
+
+    // 기존 ZIP 파일 삭제
+    if (fs.existsSync(zipPath)) {
+      fs.unlinkSync(zipPath);
+    }
+
+    // ZIP 파일 생성
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver("zip", {
+      zlib: { level: 9 }, // 최대 압축
+    });
+
+    output.on("close", () => {
+      const sizeInMB = (archive.pointer() / 1024 / 1024).toFixed(2);
+      console.log(`✓ Created portable ZIP: ${sizeInMB} MB`);
+      console.log("\n✅ Packaging completed successfully!");
+      console.log(`📦 Portable ZIP location: ${zipPath}`);
+      console.log("\n사용 방법:");
+      console.log("  1. CoffeeCube-Portable.zip 압축 해제");
+      console.log("  2. CoffeeCube.exe 실행");
+    });
+
+    archive.on("error", (err) => {
+      throw err;
+    });
+
+    archive.pipe(output);
+    archive.directory(path.join(distDir, "CoffeeCube-win32-x64"), false);
+    await archive.finalize();
   } catch (error) {
     console.error("❌ Packaging failed:", error);
     process.exit(1);
   }
 }
 
-packageElectron();
+packagePortable();

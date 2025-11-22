@@ -12,16 +12,27 @@ files:
   - "!node_modules"
   - "!server/build"
 asarUnpack:
-  - .next/standalone/**/*
-  - .next/static/**/*
-  - server/dist/**/*
+  - "**/*.node"
+  - server/dist/*
+forceCodeSigning: false
 win:
   target:
-    - target: zip
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
       arch:
         - x64
   icon: public/favicon.ico
   artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: CoffeeCube
+portable:
+  artifactName: ${productName}-Portable-${version}.${ext}
 mac:
   target:
     - dmg

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 
 interface ProgressModalProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ interface ProgressModalProps {
   allSendSignals?: string[];
   currentCommandIndex?: number;
   originalCommandCount?: number; // 원래 명령어 개수 (버킷 이동 명령어 구분용)
+  isCancelling?: boolean; // 취소 처리 중 상태
 }
 
 const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
@@ -39,6 +40,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
       allSendSignals = [],
       currentCommandIndex = -1,
       originalCommandCount = 0,
+      isCancelling = false,
     },
     ref
   ) => {
@@ -191,7 +193,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
                         isCompleted ? "text-white" : "text-neutral-700"
                       }`}
                     >
-                      {initialStatus}
+                      {initialProgress >= 100 ? "완료" : "진행중"}
                     </div>
                   </div>
                   <div className="relative text-4xl font-bold tracking-normal text-center leading-[50px] text-neutral-800 max-md:text-4xl max-md:leading-10 max-sm:text-3xl max-sm:leading-10 transition-all duration-50 linear">
@@ -372,11 +374,18 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
                 ) : (
                   <button
                     onClick={onCancel}
-                    className="flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl transition-colors max-sm:p-5 bg-red-500 hover:bg-red-600 cursor-pointer"
+                    disabled={isCancelling}
+                    className="flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl transition-colors max-sm:p-5 bg-red-500 hover:bg-red-600 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    <div className="relative text-xl font-black leading-7 text-center text-white max-sm:text-lg">
-                      취소
-                    </div>
+                    {isCancelling ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-8 h-8 animate-spin text-white" />
+                      </div>
+                    ) : (
+                      <div className="relative text-xl font-black leading-7 text-center text-white max-sm:text-lg">
+                        취소
+                      </div>
+                    )}
                   </button>
                 )}
               </div>

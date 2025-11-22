@@ -33,7 +33,9 @@ export default function ActionButtons() {
   const [isBucketFull, setIsBucketFull] = useState(false);
   const [originalCommandCount, setOriginalCommandCount] = useState<number>(0);
   const [isDailyLimitReached, setIsDailyLimitReached] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const bucketMoveCommandRef = useRef<string | null>(null);
+  const transactionUuidRef = useRef<string | null>(null);
 
   // Action Mode 훅 사용 (환경변수에 따라 테스트/실제 모드 선택)
   const {
@@ -149,15 +151,18 @@ export default function ActionButtons() {
       setOriginalCommandCount(0);
       bucketMoveCommandRef.current = null;
 
+      // 이 버튼 클릭에 대한 고유 UUID 생성 (중복 방지용)
+      transactionUuidRef.current = crypto.randomUUID();
+
       // 모달 열기
       setModalTitle(button.name);
       setIsModalOpen(true);
       setIsProcessing(true);
 
       if (button.commands.length === 0) {
-        setErrorTitle("명령 오류");
-        setErrorMessage("실행할 명령이 없습니다.");
-        setShowErrorAfterProgress(true);
+        // setErrorTitle("명령 오류");
+        // setErrorMessage("실행할 명령이 없습니다.");
+        // setShowErrorAfterProgress(true);
         setIsProcessing(false);
         return;
       }
@@ -176,32 +181,29 @@ export default function ActionButtons() {
       setOriginalCommandCount(sendSignals.length); // 원래 명령어 개수 저장
       bucketMoveCommandRef.current = null; // 버킷 이동 명령어 초기화
 
-      // 총 단계 수 계산: 각 명령마다 send + receive(또는 duration 대기) = 2단계
-      let totalSteps = commandSequence.length * 2;
-
       try {
         // 순차 실행 (버튼명 전달)
         const success = await executeCommandSequence(
           commandSequence,
           async (commandIndex, totalCommands, stepInCommand, actualReceive) => {
-            // 현재 단계 계산: 명령 인덱스 * 2 + (send=0, receive=1)
-            const currentStep =
-              commandIndex * 2 + (stepInCommand === "send" ? 0 : 1);
-            const progressPercent = Math.round(
-              (currentStep / totalSteps) * 100
-            );
-            setProgress(progressPercent);
-
             // 현재 명령 인덱스 업데이트
             setCurrentCommandIndex(commandIndex);
 
             // 현재 송신/예상/수신 신호 업데이트
             const currentCommand = commandSequence[commandIndex];
             if (stepInCommand === "send") {
+              // 송신 시에만 프로그레스바 업데이트 (최대 99%까지만)
+              const progressPercent = Math.min(
+                99,
+                Math.round(((commandIndex + 1) / commandSequence.length) * 99)
+              );
+              setProgress(progressPercent);
+
               setCurrentSendSignal(currentCommand.send || "-");
               setCurrentExpectedSignal(currentCommand.receive || "-");
               setCurrentReceiveSignal("-"); // 송신 시작 시 수신 신호 초기화
             } else {
+              // 수신 시에는 신호 정보만 업데이트 (프로그레스바는 변경하지 않음)
               // actualReceive가 있으면 사용 (테스트 모드의 mock 응답 또는 실제 응답)
               setCurrentReceiveSignal(actualReceive || "-");
 
@@ -225,11 +227,14 @@ export default function ActionButtons() {
                   console.log("[IWRP 파싱] weightGrams:", weightGrams);
                   const storedCode = localStorage.getItem("robot_code");
 
-                  if (storedCode) {
+                  if (storedCode && transactionUuidRef.current) {
                     try {
+                      // 버튼 클릭 시 생성된 UUID 재사용 (중복 방지)
+                      const transactionUuid = transactionUuidRef.current;
                       console.log("[IWRP API 호출 시작]", {
                         robot_code: storedCode,
                         weight_grams: weightGrams,
+                        transaction_uuid: transactionUuid,
                       });
                       const response = await fetch(
                         "/api/equipment/update-weight",
@@ -239,6 +244,7 @@ export default function ActionButtons() {
                           body: JSON.stringify({
                             robot_code: storedCode,
                             weight_grams: weightGrams,
+                            transaction_uuid: transactionUuid,
                           }),
                         }
                       );
@@ -257,8 +263,6 @@ export default function ActionButtons() {
                             "[버킷 전환 감지] bucketMoveCommand 저장:",
                             moveCmd
                           );
-                          // 추가 명령어가 있으므로 총 단계 수 증가
-                          totalSteps += 2;
                         } else {
                           console.log(
                             "[버킷 전환 없음] bucketSwitched:",
@@ -324,37 +328,44 @@ export default function ActionButtons() {
           // 성공 시에만 100%로 설정
           setProgress(100);
         } else {
-          // 실패 시 오류 처리
-          setErrorTitle("시리얼 통신 오류");
-          setErrorMessage(serialError || "명령 실행에 실패했습니다.");
-          setShowErrorAfterProgress(true);
+          // 취소가 아닌 경우만 오류 처리
+          // const isCancelled = serialError?.includes("취소");
+          // if (!isCancelled) {
+          //   setErrorTitle("시리얼 통신 오류");
+          //   setErrorMessage(serialError || "명령 실행에 실패했습니다.");
+          //   setShowErrorAfterProgress(true);
+          // }
         }
       } catch (error) {
         // 예외 발생 시에도 에러 메시지만 표시하고 모달은 유지
-        setErrorTitle("시리얼 통신 오류");
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "명령 실행 중 오류가 발생했습니다."
-        );
-        setShowErrorAfterProgress(true);
+        // setErrorTitle("시리얼 통신 오류");
+        // setErrorMessage(
+        //   error instanceof Error
+        //     ? error.message
+        //     : "명령 실행 중 오류가 발생했습니다."
+        // );
+        // setShowErrorAfterProgress(true);
       }
 
       setIsProcessing(false);
     },
-    [executeCommandSequence, serialError]
+    [executeCommandSequence]
   );
 
   const handleCompleteModal = useCallback(() => {
     setIsProcessing(false);
   }, []);
 
-  const handleCancelModal = useCallback(() => {
-    cancelExecution();
-    setIsProcessing(false);
-    setIsModalOpen(false);
+  const handleCancelModal = useCallback(async () => {
+    // 취소 요청 즉시 실행 (응답 대기 없이)
+    if (isProcessing) {
+      cancelExecution(); // await 제거하여 즉시 다음 단계로
+    }
 
-    // 진행 상태 초기화
+    // 상태 즉시 리셋
+    setIsCancelling(false);
+    setIsModalOpen(false);
+    setIsProcessing(false);
     setProgress(0);
     setCurrentSendSignal("-");
     setCurrentExpectedSignal("-");
@@ -363,7 +374,7 @@ export default function ActionButtons() {
     setAllSendSignals([]);
     setOriginalCommandCount(0);
     bucketMoveCommandRef.current = null;
-  }, [cancelExecution]);
+  }, [cancelExecution, isProcessing]);
 
   const handleCloseModal = useCallback(async () => {
     setIsModalOpen(false);
@@ -404,12 +415,12 @@ export default function ActionButtons() {
       }
     }
 
-    if (showErrorAfterProgress) {
-      setTimeout(() => {
-        setIsErrorModalOpen(true);
-      }, 500);
-    }
-  }, [showErrorAfterProgress]);
+    // if (showErrorAfterProgress) {
+    //   setTimeout(() => {
+    //     setIsErrorModalOpen(true);
+    //   }, 500);
+    // }
+  }, []);
 
   const handleCloseErrorModal = () => {
     setIsErrorModalOpen(false);
@@ -557,6 +568,7 @@ export default function ActionButtons() {
         allSendSignals={allSendSignals}
         currentCommandIndex={currentCommandIndex}
         originalCommandCount={originalCommandCount}
+        isCancelling={isCancelling}
       />
 
       <ErrorModal
