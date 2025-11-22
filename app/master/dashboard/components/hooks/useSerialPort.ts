@@ -72,6 +72,7 @@ export const useSerialPort = (): SerialPortHook => {
 
       // DTR/RTS 신호 명시적으로 설정 (디바이스 리셋 방지)
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (port as any).setSignals({
           dataTerminalReady: false,
           requestToSend: false,
