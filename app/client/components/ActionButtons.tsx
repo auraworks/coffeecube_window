@@ -297,7 +297,7 @@ export default function ActionButtons() {
             "[모든 명령 완료] bucketMoveCommand 값:",
             bucketMoveCommand
           );
-          // 버킷 이동 명령어가 있으면 백그라운드에서 실행
+          // 버킷 이동 명령어가 있으면 hooks를 통해 Python 서버로 직접 전송
           if (bucketMoveCommand) {
             console.log(`[버킷 이동] 명령어 송신: ${bucketMoveCommand}`);
 

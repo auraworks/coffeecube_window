@@ -341,7 +341,7 @@ export default function DashboardPanel() {
       // 프로그레스 시작
       setProgress(20);
 
-      // 1단계: 시리얼 통신으로 (SB1P) 전송
+      // 1단계: hooks를 통해 Python 서버로 (SB1P) 전송
       setCurrentSendSignal("(SB1P)");
       setCurrentExpectedSignal("-");
       setCurrentCommandIndex(0);
