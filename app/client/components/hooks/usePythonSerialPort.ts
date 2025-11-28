@@ -271,7 +271,7 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
             body: JSON.stringify({
               command: command.send,
               timeout: hasExpectedResponse ? 3.0 : 0.1, // 응답 대기: 3초, 응답 없음: 0.1초
-              max_retries: hasExpectedResponse ? 3 : 0, // 예상 신호 없으면 재시도 안함
+              max_retries: 3, // 모든 신호에 대해 3번 재시도 (1초 간격)
             }),
             signal: abortControllerRef.current?.signal,
           });
