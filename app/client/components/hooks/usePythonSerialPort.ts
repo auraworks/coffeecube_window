@@ -291,7 +291,12 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
 
           // 예상 신호가 없으면 응답 검증 없이 바로 다음으로
           if (!hasExpectedResponse) {
-            // duration 대기도 스킵하고 바로 다음 명령으로
+            // duration이 있으면 해당 시간만큼 대기
+            if (command.duration && command.duration > 0) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, command.duration)
+              );
+            }
             continue;
           }
 
