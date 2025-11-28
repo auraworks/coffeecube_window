@@ -47,7 +47,7 @@ export default function ActionButtons() {
   const handleTerminateClick = useCallback(async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/master");
+    router.push("/");
   }, [router]);
 
   // localStorage에서 robot_code 가져오기
