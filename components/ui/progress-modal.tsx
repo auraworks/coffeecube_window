@@ -57,8 +57,12 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
       if (initialProgress >= 100 && !isCompleted) {
         setIsCompleted(true);
         onComplete?.();
+        // 100% 완료 시 자동으로 모달 닫기 (1초 후)
+        setTimeout(() => {
+          onClose();
+        }, 1000);
       }
-    }, [initialProgress, isCompleted, onComplete]);
+    }, [initialProgress, isCompleted, onComplete, onClose]);
 
     if (!isOpen) return null;
 
