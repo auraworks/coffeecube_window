@@ -262,27 +262,98 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
             command.receive.trim() !== "" &&
             command.receive.trim() !== "-";
 
-          // 명령 전송
-          const response = await fetch(`${API_BASE_URL}/send`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              command: command.send,
-              timeout: hasExpectedResponse ? 3.0 : 0.1, // 응답 대기: 3초, 응답 없음: 0.1초
-              max_retries: 3, // 모든 신호에 대해 3번 재시도 (1초 간격)
-            }),
-            signal: abortControllerRef.current?.signal,
-          });
+          // 명령 전송 (프론트엔드 레벨 재시도 포함)
+          let result: {
+            success: boolean;
+            received_data?: string;
+            error?: string;
+          } | null = null;
+          let lastError: string | null = null;
+          const maxFrontendRetries = 3; // 프론트엔드에서 최대 3번 재시도
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            setError(errorData.detail || "명령 전송 실패");
-            return false;
+          for (
+            let retryCount = 0;
+            retryCount < maxFrontendRetries;
+            retryCount++
+          ) {
+            try {
+              if (cancelledRef.current) {
+                setError("사용자가 작업을 취소했습니다.");
+                return false;
+              }
+
+              if (globalTestConfig.debugMode && retryCount > 0) {
+                console.log(
+                  `[재시도 ${retryCount}/${maxFrontendRetries - 1}] ${
+                    command.send
+                  }`
+                );
+              }
+
+              const response = await fetch(`${API_BASE_URL}/send`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  command: command.send,
+                  timeout: hasExpectedResponse ? 3.0 : 0.1, // 응답 대기: 3초, 응답 없음: 0.1초
+                  max_retries: 3, // Python 서버 측 재시도 (1초 간격)
+                }),
+                signal: abortControllerRef.current?.signal,
+              });
+
+              if (!response.ok) {
+                const errorData = await response.json();
+                lastError = errorData.detail || "명령 전송 실패";
+
+                if (globalTestConfig.debugMode) {
+                  console.log(`[API 오류] ${lastError}`);
+                }
+
+                // 마지막 재시도가 아니면 1초 대기 후 재시도
+                if (retryCount < maxFrontendRetries - 1) {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                  continue;
+                }
+
+                setError(lastError);
+                return false;
+              }
+
+              result = await response.json();
+
+              // 성공적으로 응답을 받았으면 재시도 루프 종료
+              break;
+            } catch (err) {
+              // AbortError는 즉시 종료
+              if (err instanceof Error && err.name === "AbortError") {
+                setError("사용자가 작업을 취소했습니다.");
+                return false;
+              }
+
+              lastError = err instanceof Error ? err.message : "네트워크 오류";
+
+              if (globalTestConfig.debugMode) {
+                console.log(`[네트워크 오류] ${lastError}`);
+              }
+
+              // 마지막 재시도가 아니면 1초 대기 후 재시도
+              if (retryCount < maxFrontendRetries - 1) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                continue;
+              }
+
+              setError(lastError);
+              return false;
+            }
           }
 
-          const result = await response.json();
+          // 재시도 후에도 result가 없으면 실패
+          if (!result) {
+            setError(lastError || "명령 전송 실패");
+            return false;
+          }
 
           // receive 단계 알림
           if (onProgress) {
