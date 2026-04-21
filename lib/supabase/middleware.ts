@@ -45,7 +45,24 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: If you remove getClaims() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
   const { data } = await supabase.auth.getClaims();
-  const user = data?.claims;
+  const claims = data?.claims;
+
+  // 세션 만료 체크 - JWT의 exp claim 확인
+  const expiresAt = claims?.exp;
+  const isExpired = expiresAt ? Date.now() >= expiresAt * 1000 : false;
+
+  // 만료된 세션이면 쿠키 제거 후 루트 페이지로 리다이렉트
+  if (isExpired) {
+    await supabase.auth.signOut();
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    const response = NextResponse.redirect(url);
+    response.cookies.delete("sb-access-token");
+    response.cookies.delete("sb-refresh-token");
+    return response;
+  }
+
+  const user = claims;
 
   // /master/dashboard 접근 시에만 인증 확인하여 /master로 리다이렉트
   if (request.nextUrl.pathname.startsWith("/master/dashboard") && !user) {
